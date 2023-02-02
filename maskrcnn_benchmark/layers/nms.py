@@ -1,4 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+import torch
 from maskrcnn_benchmark import _C
 
 try:

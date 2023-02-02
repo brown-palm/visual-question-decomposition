@@ -1,5 +1,6 @@
 import cv2
 import torch
+from torch.nn import functional as F
 import re
 import numpy as np
 from typing import List, Union
@@ -8,20 +9,27 @@ import inflect
 from transformers import AutoTokenizer
 from torchvision import transforms as T
 import pdb
-from maskrcnn_benchmark.modeling.detector import build_detection_model
-from maskrcnn_benchmark.utils.checkpoint import DetectronCheckpointer
-from maskrcnn_benchmark.structures.image_list import to_image_list
-from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
-from maskrcnn_benchmark.structures.bounding_box import BoxList
-from maskrcnn_benchmark import layers as L
-from maskrcnn_benchmark.modeling.roi_heads.mask_head.inference import Masker
-from maskrcnn_benchmark.utils import cv2_util
+# from maskrcnn_benchmark.modeling.detector import build_detection_model
+# from maskrcnn_benchmark.utils.checkpoint import DetectronCheckpointer
+# from maskrcnn_benchmark.structures.image_list import to_image_list
+# from maskrcnn_benchmark import layers as L # only used for L.interpolate ONCE -- try removing
+# from maskrcnn_benchmark.modeling.roi_heads.mask_head.inference import Masker
+# from maskrcnn_benchmark.utils import cv2_util
+
+from maskrcnn_benchmark.standalone.imagelist import to_image_list
+from maskrcnn_benchmark.standalone.masker import Masker
+from maskrcnn_benchmark.standalone.serialization import load_state_dict
+from maskrcnn_benchmark.standalone import cv2_util
 
 engine = inflect.engine()
 nltk.download('punkt')
 nltk.download('averaged_perceptron_tagger')
 
 import timeit
+
+from torchvision.models.detection.generalized_rcnn import GeneralizedRCNN
+from torchvision.models.detection import rpn
+from maskrcnn_benchmark.standalone.builder import build_resnet_backbone, build_rpn, build_roi_heads
 
 
 class GLIPDemo(object):
@@ -36,7 +44,9 @@ class GLIPDemo(object):
                  ):
         self.cfg = cfg.clone()
         if load_model:
-            self.model = build_detection_model(cfg)
+            # build the model and load checkpoint
+            
+            self.model = GeneralizedRCNN(backbone=build_resnet_backbone(cfg), rpn=build_rpn(cfg), roi_heads=build_roi_heads(cfg))
             self.model.eval()
             self.device = torch.device(cfg.MODEL.DEVICE)
             self.model.to(self.device)
@@ -46,8 +56,11 @@ class GLIPDemo(object):
 
         save_dir = cfg.OUTPUT_DIR
         if load_model:
-            checkpointer = DetectronCheckpointer(cfg, self.model, save_dir=save_dir)
-            _ = checkpointer.load(cfg.MODEL.WEIGHT)
+            keyword = "model"
+            checkpoint = torch.load(cfg.MODEL.WEIGHT, map_location=torch.device("cpu"))
+            _ = load_state_dict(self.model, checkpoint.pop(keyword))
+            # checkpointer = DetectronCheckpointer(cfg, self.model, save_dir=save_dir)
+            # _ = checkpointer.load(cfg.MODEL.WEIGHT)
         
         if tensor_inputs:
             self.transforms = self.build_tensor_transforms()
@@ -413,7 +426,7 @@ class GLIPDemo(object):
     def create_mask_montage(self, image, predictions):
         masks = predictions.get_field("mask")
         masks_per_dim = self.masks_per_dim
-        masks = L.interpolate(
+        masks = F.interpolate(
             masks.float(), scale_factor=1 / masks_per_dim
         ).byte()
         height, width = masks.shape[-2:]
@@ -506,3 +519,4 @@ def remove_punctuation(text: str) -> str:
     for p in punct:
         text = text.replace(p, '')
     return text.strip()
+
