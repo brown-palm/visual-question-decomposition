@@ -25,6 +25,8 @@ import pkgutil
 from .configs import config
 
 
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
 # --------------------------- Base abstract model --------------------------- #
 
 class BaseModel(abc.ABC):
