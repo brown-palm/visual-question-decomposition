@@ -1,7 +1,7 @@
 accelerate==0.18.0
 bitsandbytes==0.38.1
 clip @ git+https://github.com/openai/CLIP.git
--e git+https://github.com/apoorvkh/viper.git@glip#egg=maskrcnn_benchmark
+# maskrcnn_benchmark @ git+https://github.com/apoorvkh/viper.git@glip
 kornia==0.6.9
 numpy==1.23.5
 openai==0.27.7
