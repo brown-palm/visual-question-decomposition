@@ -5,7 +5,6 @@ process(name, *args, **kwargs), where *args and **kwargs are the arguments of th
 """
 
 import abc
-import backoff
 import contextlib
 import openai
 import os
@@ -16,26 +15,14 @@ import torchvision
 import warnings
 from PIL import Image
 from collections import Counter
-from contextlib import redirect_stdout
-from functools import partial
 from itertools import chain
-from joblib import Memory
-from rich.console import Console
 from torch import hub
 from torch.nn import functional as F
 from torchvision import transforms
 from typing import List, Union
+import pkgutil
 
-from configs import config
-from utils import HiddenPrints
-
-with open('api.key') as f:
-    openai.api_key = f.read().strip()
-
-cache = Memory('cache/' if config.use_cache else None, verbose=0)
-device = "cuda" if torch.cuda.is_available() else "cpu"
-console = Console(highlight=False)
-HiddenPrints = partial(HiddenPrints, console=console, use_newline=config.multiprocessing)
+from .configs import config
 
 
 # --------------------------- Base abstract model --------------------------- #
@@ -47,7 +34,7 @@ class BaseModel(abc.ABC):
     requires_gpu = True
 
     def __init__(self, gpu_number):
-        self.dev = f'cuda:{gpu_number}' if device == 'cuda' else device
+        self.dev = f'cuda:{gpu_number}' if torch.cuda.is_available() == 'cuda' else "cpu"
 
     @abc.abstractmethod
     def forward(self, *args, **kwargs):
@@ -85,9 +72,8 @@ class ObjectDetector(BaseModel):
     def __init__(self, gpu_number=0):
         super().__init__(gpu_number)
 
-        with HiddenPrints('ObjectDetector'):
-            detection_model = hub.load('facebookresearch/detr', 'detr_resnet50', pretrained=True).to(self.dev)
-            detection_model.eval()
+        detection_model = hub.load('facebookresearch/detr', 'detr_resnet50', pretrained=True).to(self.dev)
+        detection_model.eval()
 
         self.detection_model = detection_model
 
@@ -107,13 +93,12 @@ class DepthEstimationModel(BaseModel):
 
     def __init__(self, gpu_number=0, model_type='DPT_Large'):
         super().__init__(gpu_number)
-        with HiddenPrints('DepthEstimation'):
-            warnings.simplefilter("ignore")
-            # Model options: MiDaS_small, DPT_Hybrid, DPT_Large
-            depth_estimation_model = hub.load('intel-isl/MiDaS', model_type, pretrained=True).to(self.dev)
-            depth_estimation_model.eval()
+        warnings.simplefilter("ignore")
+        # Model options: MiDaS_small, DPT_Hybrid, DPT_Large
+        depth_estimation_model = hub.load('intel-isl/MiDaS', model_type, pretrained=True).to(self.dev)
+        depth_estimation_model.eval()
 
-            midas_transforms = torch.hub.load("intel-isl/MiDaS", "transforms")
+        midas_transforms = hub.load("intel-isl/MiDaS", "transforms")
 
         if model_type == "DPT_Large" or model_type == "DPT_Hybrid":
             self.transform = midas_transforms.dpt_transform
@@ -150,10 +135,9 @@ class CLIPModel(BaseModel):
         import clip
         self.clip = clip
 
-        with HiddenPrints('CLIP'):
-            model, preprocess = clip.load(version, device=self.dev)
-            model.eval()
-            model.requires_grad_ = False
+        model, preprocess = clip.load(version, device=self.dev)
+        model.eval()
+        model.requires_grad_ = False
         self.model = model
         self.negative_text_features = None
         self.transform = self.get_clip_transforms_from_tensor(336 if "336" in version else 224)
@@ -216,8 +200,8 @@ class CLIPModel(BaseModel):
     @torch.no_grad()
     def clip_negatives(self, prompt_prefix, negative_categories=None):
         if negative_categories is None:
-            with open('useful_lists/random_negatives.txt') as f:
-                negative_categories = [x.strip() for x in f.read().split()]
+            f = pkgutil.get_data(__name__, "data/useful_lists/random_negatives.txt")
+            negative_categories = [x.strip() for x in f.read().decode('utf-8').split()]
         # negative_categories = negative_categories[:1000]
         # negative_categories = ["a cat", "a lamp"]
         negative_categories = [prompt_prefix + x for x in negative_categories]
@@ -314,12 +298,11 @@ class CLIPModel(BaseModel):
 class MaskRCNNModel(BaseModel):
     name = 'maskrcnn'
 
-    def __init__(self, gpu_number=0, threshold=config.detect_thresholds.maskrcnn):
+    def __init__(self, gpu_number=0, threshold=config['detect_thresholds']['maskrcnn']):
         super().__init__(gpu_number)
-        with HiddenPrints('MaskRCNN'):
-            obj_detect = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights='COCO_V1').to(self.dev)
-            obj_detect.eval()
-            obj_detect.requires_grad_(False)
+        obj_detect = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights='COCO_V1').to(self.dev)
+        obj_detect.eval()
+        obj_detect.requires_grad_(False)
         self.categories = torchvision.models.detection.MaskRCNN_ResNet50_FPN_V2_Weights.COCO_V1.meta['categories']
         self.obj_detect = obj_detect
         self.threshold = threshold
@@ -357,16 +340,15 @@ class MaskRCNNModel(BaseModel):
 class OwlViTModel(BaseModel):
     name = 'owlvit'
 
-    def __init__(self, gpu_number=0, threshold=config.detect_thresholds.owlvit):
+    def __init__(self, gpu_number=0, threshold=config['detect_thresholds']['owlvit']):
         super().__init__(gpu_number)
 
         from transformers import OwlViTProcessor, OwlViTForObjectDetection
 
-        with HiddenPrints("OwlViT"):
-            processor = OwlViTProcessor.from_pretrained("google/owlvit-base-patch32")
-            model = OwlViTForObjectDetection.from_pretrained("google/owlvit-base-patch32")
-            model.eval()
-            model.requires_grad_(False)
+        processor = OwlViTProcessor.from_pretrained("google/owlvit-base-patch32")
+        model = OwlViTForObjectDetection.from_pretrained("google/owlvit-base-patch32")
+        model.eval()
+        model.requires_grad_(False)
         self.model = model.to(self.dev)
         self.processor = processor
         self.threshold = threshold
@@ -416,7 +398,7 @@ class GLIPModel(BaseModel):
             from maskrcnn_benchmark.engine.predictor_glip import GLIPDemo, to_image_list, create_positive_map, \
                 create_positive_map_label_to_token_from_positive_map
 
-        working_dir = f'{config.path_pretrained_models}/GLIP/'
+        working_dir = f'{hub.get_dir()}/viper/GLIP/'
         if model_size == 'tiny':
             config_file = working_dir + "configs/glip_Swin_T_O365_GoldG.yaml"
             weight_file = working_dir + "checkpoints/glip_tiny_model_o365_goldg_cc_sbu.pth"
@@ -430,7 +412,7 @@ class GLIPModel(BaseModel):
 
                 kwargs = {
                     'min_image_size': 800,
-                    'confidence_threshold': config.detect_thresholds.glip,
+                    'confidence_threshold': config['detect_thresholds']['glip'],
                     'show_mask_heatmaps': False
                 }
 
@@ -445,7 +427,7 @@ class GLIPModel(BaseModel):
                 cfg.merge_from_list(["MODEL.WEIGHT", weight_file])
                 cfg.merge_from_list(["MODEL.DEVICE", self.dev])
 
-                with HiddenPrints("GLIP"), torch.cuda.device(self.dev):
+                with torch.cuda.device(self.dev):
                     from transformers.utils import logging
                     logging.set_verbosity_error()
                     GLIPDemo.__init__(self, cfg, *args_demo, **kwargs)
@@ -510,9 +492,8 @@ class GLIPModel(BaseModel):
                 tic = timeit.time.perf_counter()
 
                 # compute predictions
-                with HiddenPrints():   # Hide some deprecated notices
-                    predictions = self.model(image_list, captions=[original_caption],
-                                             positive_map=positive_map_label_to_token)
+                predictions = self.model(image_list, captions=[original_caption],
+                                            positive_map=positive_map_label_to_token)
                 predictions = [o.to(self.cpu_device) for o in predictions]
                 # print("inference time per image: {}".format(timeit.time.perf_counter() - tic))
 
@@ -604,9 +585,9 @@ class TCLModel(BaseModel):
 
     def __init__(self, gpu_number=0):
 
-        from base_models.tcl.tcl_model_pretrain import ALBEF
-        from base_models.tcl.tcl_vit import interpolate_pos_embed
-        from base_models.tcl.tcl_tokenization_bert import BertTokenizer
+        from .base_models.tcl.tcl_model_pretrain import ALBEF
+        from .base_models.tcl.tcl_vit import interpolate_pos_embed
+        from .base_models.tcl.tcl_tokenization_bert import BertTokenizer
 
         super().__init__(gpu_number)
         config = {
@@ -621,11 +602,11 @@ class TCLModel(BaseModel):
         }
 
         text_encoder = 'bert-base-uncased'
-        checkpoint_path = f'{config.path_pretrained_models}/TCL_4M.pth'
+        checkpoint_path = f'{hub.get_dir()}/viper/TCL_4M.pth'
 
         self.tokenizer = BertTokenizer.from_pretrained(text_encoder)
 
-        with warnings.catch_warnings(), HiddenPrints("TCL"):
+        with warnings.catch_warnings():
             model = ALBEF(config=config, text_encoder=text_encoder, tokenizer=self.tokenizer)
 
             checkpoint = torch.load(checkpoint_path, map_location='cpu')
@@ -759,15 +740,6 @@ class TCLModel(BaseModel):
         return out
 
 
-@cache.cache(ignore=['result'])
-def gpt3_cache_aux(fn_name, prompts, temperature, n_votes, result):
-    """
-    This is a trick to manually cache results from GPT-3. We want to do it manually because the queries to GPT-3 are
-    batched, and caching doesn't make sense for batches. With this we can separate individual samples in the batch
-    """
-    return result
-
-
 class GPT3Model(BaseModel):
     name = 'gpt3'
     to_batch = False
@@ -775,11 +747,10 @@ class GPT3Model(BaseModel):
 
     def __init__(self, gpu_number=0):
         super().__init__(gpu_number=gpu_number)
-        with open(config.gpt3.qa_prompt) as f:
-            self.qa_prompt = f.read().strip()
-        self.temperature = config.gpt3.temperature
-        self.n_votes = config.gpt3.n_votes
-        self.model = config.gpt3.model
+        self.qa_prompt = pkgutil.get_data(__name__, "data/prompts/gpt3/gpt3_qa.txt").decode('utf-8').strip()
+        self.temperature = config['gpt3']['temperature']
+        self.n_votes = config['gpt3']['n_votes']
+        self.model = config['gpt3']['model']
 
     # initial cleaning for reference QA results
     @staticmethod
@@ -875,32 +846,12 @@ class GPT3Model(BaseModel):
 
         to_compute = None
         results = []
-        # Check if in cache
-        if config.use_cache:
-            for p in prompt:
-                # This is not ideal, because if not found, later it will have to re-hash the arguments.
-                # But I could not find a better way to do it.
-                result = gpt3_cache_aux(process_name, p, self.temperature, self.n_votes, None)
-                results.append(result)  # If in cache, will be actual result, otherwise None
-            to_compute = [i for i, r in enumerate(results) if r is None]
-            prompt = [prompt[i] for i in to_compute]
 
         if len(prompt) > 0:
             if process_name == 'gpt3_qa':
-                response = self.get_qa(prompt)
+                results = self.get_qa(prompt)
             else:  # 'gpt3_general', general prompt, has to be given all of it
-                response = self.get_general(prompt)
-        else:
-            response = []  # All previously cached
-
-        if config.use_cache:
-            for p, r in zip(prompt, response):
-                # "call" forces the overwrite of the cache
-                gpt3_cache_aux.call(process_name, p, self.temperature, self.n_votes, r)
-            for i, idx in enumerate(to_compute):
-                results[idx] = response[i]
-        else:
-            results = response
+                results = self.get_general(prompt)
 
         if not self.to_batch:
             results = results[0]
@@ -911,137 +862,14 @@ class GPT3Model(BaseModel):
         return ['gpt3_' + n for n in ['qa', 'general']]
 
 
-# @cache.cache
-@backoff.on_exception(backoff.expo, Exception, max_tries=10)
-def codex_helper(extended_prompt):
-    assert 0 <= config.codex.temperature <= 1
-    assert 1 <= config.codex.best_of <= 20
-
-    if config.codex.model in ("gpt-4", "gpt-3.5-turbo"):
-        if not isinstance(extended_prompt, list):
-            extended_prompt = [extended_prompt]
-        responses = [openai.ChatCompletion.create(
-                model=config.codex.model,
-                messages=[
-                    # {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "system", "content": "Only answer with a function starting def execute_command."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=config.codex.temperature,
-                max_tokens=config.codex.max_tokens,
-                top_p = 1.,
-                frequency_penalty=0,
-                presence_penalty=0,
-#                 best_of=config.codex.best_of,
-                stop=["\n\n"],
-                )
-                    for prompt in extended_prompt]
-        resp = [r['choices'][0]['message']['content'].replace("execute_command(image)", "execute_command(image, my_fig, time_wait_between_lines, syntax)") for r in responses]
-#         if len(resp) == 1:
-#             resp = resp[0]
-    else:
-        warnings.warn('OpenAI Codex is deprecated. Please use GPT-4 or GPT-3.5-turbo.')
-        response = openai.Completion.create(
-            model="code-davinci-002",
-            temperature=config.codex.temperature,
-            prompt=extended_prompt,
-            max_tokens=config.codex.max_tokens,
-            top_p=1,
-            frequency_penalty=0,
-            presence_penalty=0,
-            best_of=config.codex.best_of,
-            stop=["\n\n"],
-        )
-
-        if isinstance(extended_prompt, list):
-            resp = [r['text'] for r in response['choices']]
-        else:
-            resp = response['choices'][0]['text']
-
-    return resp
-
-
-class CodexModel(BaseModel):
-    name = 'codex'
-    requires_gpu = False
-    max_batch_size = 5
-
-    # Not batched, but every call will probably be a batch (coming from the same process)
-
-    def __init__(self, gpu_number=0):
-        super().__init__(gpu_number=0)
-        with open(config.codex.prompt) as f:
-            self.base_prompt = f.read().strip()
-        self.fixed_code = None
-        if config.use_fixed_code:
-            with open(config.fixed_code_file) as f:
-                self.fixed_code = f.read()
-
-    def forward(self, prompt, input_type='image', prompt_file=None, base_prompt=None):
-        if config.use_fixed_code:  # Use the same program for every sample, like in socratic models
-            return [self.fixed_code] * len(prompt) if isinstance(prompt, list) else self.fixed_code
-
-        if prompt_file is not None and base_prompt is None:  # base_prompt takes priority
-            with open(prompt_file) as f:
-                base_prompt = f.read().strip()
-        elif base_prompt is None:
-            base_prompt = self.base_prompt
-
-        if isinstance(prompt, list):
-            extended_prompt = [base_prompt.replace("INSERT_QUERY_HERE", p).replace('INSERT_TYPE_HERE', input_type)
-                               for p in prompt]
-        elif isinstance(prompt, str):
-            extended_prompt = [base_prompt.replace("INSERT_QUERY_HERE", prompt).
-                               replace('INSERT_TYPE_HERE', input_type)]
-        else:
-            raise TypeError("prompt must be a string or a list of strings")
-
-        result = self.forward_(extended_prompt)
-        if not isinstance(prompt, list):
-            result = result[0]
-
-        return result
-
-    def forward_(self, extended_prompt):
-        if len(extended_prompt) > self.max_batch_size:
-            response = []
-            for i in range(0, len(extended_prompt), self.max_batch_size):
-                response += self.forward_(extended_prompt[i:i + self.max_batch_size])
-        try:
-            response = codex_helper(extended_prompt)
-        except openai.error.RateLimitError as e:
-            print("Retrying Codex, splitting batch")
-            if len(extended_prompt) == 1:
-                warnings.warn("This is taking too long, maybe OpenAI is down? (status.openai.com/)")
-            # Will only be here after the number of retries in the backoff decorator.
-            # It probably means a single batch takes up the entire rate limit.
-            sub_batch_1 = extended_prompt[:len(extended_prompt) // 2]
-            sub_batch_2 = extended_prompt[len(extended_prompt) // 2:]
-            if len(sub_batch_1) > 0:
-                response_1 = self.forward_(sub_batch_1)
-            else:
-                response_1 = []
-            if len(sub_batch_2) > 0:
-                response_2 = self.forward_(sub_batch_2)
-            else:
-                response_2 = []
-            response = response_1 + response_2
-        except Exception as e:
-            # Some other error like an internal OpenAI error
-            print("Retrying Codex")
-            print(e)
-            response = self.forward_(extended_prompt)
-        return response
-
-
 class BLIPModel(BaseModel):
     name = 'blip'
     to_batch = True
     max_batch_size = 32
     seconds_collect_data = 0.2  # The queue has additionally the time it is executing the previous forward pass
 
-    def __init__(self, gpu_number=0, half_precision=config.blip_half_precision,
-                 blip_v2_model_type=config.blip_v2_model_type):
+    def __init__(self, gpu_number=0, half_precision=config['blip_half_precision'],
+                 blip_v2_model_type=config['blip_v2_model_type']):
         super().__init__(gpu_number)
 
         # from lavis.models import load_model_and_preprocess
@@ -1052,7 +880,7 @@ class BLIPModel(BaseModel):
         assert blip_v2_model_type in ['blip2-flan-t5-xxl', 'blip2-flan-t5-xl', 'blip2-opt-2.7b', 'blip2-opt-6.7b',
                                       'blip2-opt-2.7b-coco', 'blip2-flan-t5-xl-coco', 'blip2-opt-6.7b-coco']
 
-        with warnings.catch_warnings(), HiddenPrints("BLIP"), torch.cuda.device(self.dev):
+        with warnings.catch_warnings(), torch.cuda.device(self.dev):
             max_memory = {gpu_number: torch.cuda.mem_get_info(self.dev)[0]}
 
             self.processor = Blip2Processor.from_pretrained(f"Salesforce/{blip_v2_model_type}")
@@ -1145,12 +973,11 @@ class BLIPModel(BaseModel):
 class SaliencyModel(BaseModel):
     name = 'saliency'
 
-    def __init__(self, gpu_number=0,
-                 path_checkpoint=f'{config.path_pretrained_models}/saliency_inspyrenet_plus_ultra'):
+    def __init__(self, gpu_number=0):
 
-        from base_models.inspyrenet.saliency_transforms import get_transform
-        from base_models.inspyrenet.InSPyReNet import InSPyReNet
-        from base_models.inspyrenet.backbones.SwinTransformer import SwinB
+        from .base_models.inspyrenet.saliency_transforms import get_transform
+        from .base_models.inspyrenet.InSPyReNet import InSPyReNet
+        from .base_models.inspyrenet.backbones.SwinTransformer import SwinB
 
         # These parameters are for the Plus Ultra LR model
         super().__init__(gpu_number)
@@ -1158,11 +985,11 @@ class SaliencyModel(BaseModel):
         pretrained = True
         base_size = [384, 384]
         kwargs = {'name': 'InSPyReNet_SwinB', 'threshold': 512}
-        with HiddenPrints("Saliency"):
-            model = InSPyReNet(SwinB(pretrained=pretrained, path_pretrained_models=config.path_pretrained_models),
-                               [128, 128, 256, 512, 1024], depth, base_size, **kwargs)
-            model.load_state_dict(torch.load(os.path.join(path_checkpoint, 'latest.pth'),
-                                             map_location=torch.device('cpu')), strict=True)
+        swin_model_dir = f'{hub.get_dir()}/viper/swin'
+        model = InSPyReNet(SwinB(pretrained=pretrained, path_pretrained_models=swin_model_dir),
+                            [128, 128, 256, 512, 1024], depth, base_size, **kwargs)
+        model.load_state_dict(torch.load(f'{hub.get_dir()}/viper/saliency_inspyrenet_plus_ultra/latest.pth',
+                                            map_location=torch.device('cpu')), strict=True)
         model = model.to(self.dev)
         model.eval()
 
@@ -1193,10 +1020,9 @@ class SaliencyModel(BaseModel):
 class XVLMModel(BaseModel):
     name = 'xvlm'
 
-    def __init__(self, gpu_number=0,
-                 path_checkpoint=f'{config.path_pretrained_models}/xvlm/retrieval_mscoco_checkpoint_9.pth'):
+    def __init__(self, gpu_number=0):
 
-        from base_models.xvlm.xvlm import XVLMBase
+        from .base_models.xvlm.xvlm import XVLMBase
         from transformers import BertTokenizer
 
         super().__init__(gpu_number)
@@ -1220,9 +1046,9 @@ class XVLMModel(BaseModel):
             'depths': [2, 2, 18, 2],
             'num_heads': [4, 8, 16, 32]
         }
-        with warnings.catch_warnings(), HiddenPrints("XVLM"):
+        with warnings.catch_warnings():
             model = XVLMBase(config_xvlm, use_contrastive_loss=True, vision_config=vision_config)
-            checkpoint = torch.load(path_checkpoint, map_location='cpu')
+            checkpoint = torch.load(f'{hub.get_dir()}/viper/xvlm/retrieval_mscoco_checkpoint_9.pth', map_location='cpu')
             state_dict = checkpoint['model'] if 'model' in checkpoint.keys() else checkpoint
             msg = model.load_state_dict(state_dict, strict=False)
         if len(msg.missing_keys) > 0:
@@ -1242,8 +1068,8 @@ class XVLMModel(BaseModel):
             normalize,
         ])
 
-        with open('useful_lists/random_negatives.txt') as f:
-            self.negative_categories = [x.strip() for x in f.read().split()]
+        f = pkgutil.get_data(__name__, "data/useful_lists/random_negatives.txt")
+        negative_categories = [x.strip() for x in f.read().decode('utf-8').split()]
 
     @staticmethod
     def pre_caption(caption, max_words):

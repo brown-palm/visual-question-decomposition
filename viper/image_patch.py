@@ -1,20 +1,17 @@
 from __future__ import annotations
 
+from typing import Callable, Dict
 import numpy as np
 import re
 import torch
 from dateutil import parser as dateparser
 from PIL import Image
-from rich.console import Console
 from torchvision import transforms
 from torchvision.ops import box_iou
 from typing import Union, List
 from word2number import w2n
-
-from utils import show_single_image, load_json
-from vision_processes import forward, config
-
-console = Console(highlight=False)
+import json
+import pkgutil
 
 
 class ImagePatch:
@@ -53,8 +50,8 @@ class ImagePatch:
         Returns a new ImagePatch object containing a crop of the image at the given coordinates.
     """
 
-    def __init__(self, image: Union[Image.Image, torch.Tensor, np.ndarray], left: int = None, lower: int = None,
-                 right: int = None, upper: int = None, parent_left=0, parent_lower=0, queues=None,
+    def __init__(self, config: Dict, forward: Callable, image: Union[Image.Image, torch.Tensor, np.ndarray], left: int = None, lower: int = None,
+                 right: int = None, upper: int = None, parent_left=0, parent_lower=0,
                  parent_img_patch=None):
         """Initializes an ImagePatch object by cropping the image at the given coordinates and stores the coordinates as
         attributes. If no coordinates are provided, the image is left unmodified, and the coordinates are set to the
@@ -74,6 +71,9 @@ class ImagePatch:
             An int describing the position of the top border of the crop's bounding box in the original image.
 
         """
+
+        self.config = config
+        self.forward = forward
 
         if isinstance(image, Image.Image):
             image = transforms.ToTensor()(image)
@@ -99,7 +99,6 @@ class ImagePatch:
         self.width = self.cropped_image.shape[2]
 
         self.cache = {}
-        self.queues = (None, None) if queues is None else queues
 
         self.parent_img_patch = parent_img_patch
 
@@ -109,10 +108,7 @@ class ImagePatch:
         if self.cropped_image.shape[1] == 0 or self.cropped_image.shape[2] == 0:
             raise Exception("ImagePatch has no area")
 
-        self.possible_options = load_json('./useful_lists/possible_options.json')
-
-    def forward(self, model_name, *args, **kwargs):
-        return forward(model_name, *args, queues=self.queues, **kwargs)
+        self.possible_options = json.loads(pkgutil.get_data(__name__, "data/useful_lists/possible_options.json"))
 
     @property
     def original_image(self):
@@ -134,18 +130,14 @@ class ImagePatch:
         List[ImagePatch]
             a list of ImagePatch objects matching object_name contained in the crop
         """
-        if object_name in ["object", "objects"]:
-            all_object_coordinates = self.forward('maskrcnn', self.cropped_image)[0]
-        else:
+        if object_name == 'person':
+            object_name = 'people'  # GLIP does better at people than person
 
-            if object_name == 'person':
-                object_name = 'people'  # GLIP does better at people than person
-
-            all_object_coordinates = self.forward('glip', self.cropped_image, object_name)
-        if len(all_object_coordinates) == 0:
+        all_object_coordinates = self.forward('glip', self.cropped_image, object_name)
+        if all_object_coordinates is None or len(all_object_coordinates) == 0:
             return []
 
-        threshold = config.ratio_box_area_to_image_area
+        threshold = self.config['ratio_box_area_to_image_area']
         if threshold > 0:
             area_im = self.width * self.height
             all_areas = torch.tensor([(coord[2]-coord[0]) * (coord[3]-coord[1]) / area_im
@@ -212,16 +204,16 @@ class ImagePatch:
             A string describing the property to be checked.
         """
         name = f"{attribute} {object_name}"
-        model = config.verify_property.model
+        model = self.config['verify_property']['model']
         negative_categories = [f"{att} {object_name}" for att in self.possible_options['attributes']]
         if model == 'clip':
             return self._detect(name, negative_categories=negative_categories,
-                                thresh=config.verify_property.thresh_clip, model='clip')
+                                thresh=self.config['verify_property']['thresh_clip'], model='clip')
         elif model == 'tcl':
-            return self._detect(name, thresh=config.verify_property.thresh_tcl, model='tcl')
+            return self._detect(name, thresh=self.config['verify_property']['thresh_tcl'], model='tcl')
         else:  # 'xvlm'
             return self._detect(name, negative_categories=negative_categories,
-                                thresh=config.verify_property.thresh_xvlm, model='xvlm')
+                                thresh=self.config['verify_property']['thresh_xvlm'], model='xvlm')
 
     def best_text_match(self, option_list: list[str] = None, prefix: str = None) -> str:
         """Returns the string that best matches the image.
@@ -236,7 +228,7 @@ class ImagePatch:
         if prefix is not None:
             option_list_to_use = [prefix + " " + option for option in option_list]
 
-        model_name = config.best_match_model
+        model_name = self.config['best_match_model']
         image = self.cropped_image
         text = option_list_to_use
         if model_name in ('clip', 'tcl'):
@@ -300,14 +292,13 @@ class ImagePatch:
         right = int(right)
         upper = int(upper)
 
-        if config.crop_larger_margin:
+        if self.config['crop_larger_margin']:
             left = max(0, left - 10)
             lower = max(0, lower - 10)
             right = min(self.width, right + 10)
             upper = min(self.height, upper + 10)
 
-        return ImagePatch(self.cropped_image, left, lower, right, upper, self.left, self.lower, queues=self.queues,
-                          parent_img_patch=self)
+        return ImagePatch(self.config, self.forward, self.cropped_image, left, lower, right, upper, self.left, self.lower, parent_img_patch=self)
 
     def overlaps_with(self, left, lower, right, upper):
         """Returns True if a crop with the given coordinates overlaps with this one,
@@ -333,14 +324,11 @@ class ImagePatch:
     def llm_query(self, question: str, long_answer: bool = True) -> str:
         return llm_query(question, None, long_answer)
 
-    def print_image(self, size: tuple[int, int] = None):
-        show_single_image(self.cropped_image, size)
-
     def __repr__(self):
         return "ImagePatch({}, {}, {}, {})".format(self.left, self.lower, self.right, self.upper)
 
 
-def best_image_match(list_patches: list[ImagePatch], content: List[str], return_index: bool = False) -> \
+def best_image_match(config: Dict, list_patches: list[ImagePatch], content: List[str], return_index: bool = False) -> \
         Union[ImagePatch, None]:
     """Returns the patch most likely to contain the content.
     Parameters
@@ -359,7 +347,7 @@ def best_image_match(list_patches: list[ImagePatch], content: List[str], return_
     if len(list_patches) == 0:
         return None
 
-    model = config.best_match_model
+    model = config['best_match_model']
 
     scores = []
     for cont in content:
@@ -420,7 +408,7 @@ def bool_to_yesno(bool_answer: bool) -> str:
     return "yes" if bool_answer else "no"
 
 
-def llm_query(query, context=None, long_answer=True, queues=None):
+def llm_query(query, context=None, long_answer=True):
     """Answers a text question using GPT-3. The input question is always a formatted string with a variable in it.
 
     Parameters
@@ -429,9 +417,9 @@ def llm_query(query, context=None, long_answer=True, queues=None):
         the text question to ask. Must not contain any reference to 'the image' or 'the photo', etc.
     """
     if long_answer:
-        return forward(model_name='gpt3_general', prompt=query, queues=queues)
+        return forward(model_name='gpt3_general', prompt=query)
     else:
-        return forward(model_name='gpt3_qa', prompt=[query, context], queues=queues)
+        return forward(model_name='gpt3_qa', prompt=[query, context])
 
 
 def coerce_to_numeric(string, no_string=False):

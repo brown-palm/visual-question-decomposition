@@ -622,17 +622,17 @@ class SwinTransformer(nn.Module):
         super(SwinTransformer, self).train(mode)
         self._freeze_stages()
 
-def SwinT(pretrained=True):
+def SwinT(pretrained=True, path_pretrained_models=''):
     model = SwinTransformer(embed_dim=96, depths=[2, 2, 6, 2], num_heads=[3, 6, 12, 24], window_size=7)
     if pretrained is True:
-        model.load_state_dict(torch.load('data/backbone_ckpt/swin_tiny_patch4_window7_224.pth', map_location='cpu')['model'], strict=False)
+        model.load_state_dict(torch.load(f'{path_pretrained_models}/swin_tiny_patch4_window7_224.pth', map_location='cpu')['model'], strict=False)
         
     return model
 
-def SwinS(pretrained=True):
+def SwinS(pretrained=True, path_pretrained_models=''):
     model = SwinTransformer(embed_dim=96, depths=[2, 2, 18, 2], num_heads=[3, 6, 12, 24], window_size=7)
     if pretrained is True:
-        model.load_state_dict(torch.load('data/backbone_ckpt/swin_small_patch4_window7_224.pth', map_location='cpu')['model'], strict=False)
+        model.load_state_dict(torch.load(f'{path_pretrained_models}/swin_small_patch4_window7_224.pth', map_location='cpu')['model'], strict=False)
         
     return model
 
@@ -643,10 +643,10 @@ def SwinB(pretrained=True, path_pretrained_models=''):
         
     return model
 
-def SwinL(pretrained=True):
+def SwinL(pretrained=True, path_pretrained_models=''):
     model = SwinTransformer(embed_dim=192, depths=[2, 2, 18, 2], num_heads=[6, 12, 24, 48], window_size=12)
     if pretrained is True:
-        model.load_state_dict(torch.load('data/backbone_ckpt/swin_large_patch4_window12_384_22kto1k.pth', map_location='cpu')['model'], strict=False)
+        model.load_state_dict(torch.load(f'{path_pretrained_models}/swin_large_patch4_window12_384_22kto1k.pth', map_location='cpu')['model'], strict=False)
 
     return model
 

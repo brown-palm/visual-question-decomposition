@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # change this to your preferred download location
-PRETRAINED_MODELS_PATH=./pretrained_models
+PRETRAINED_MODELS_PATH=$TORCH_HOME/hub/viper
 
 # GLIP model
 mkdir -p $PRETRAINED_MODELS_PATH/GLIP/checkpoints

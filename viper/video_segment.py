@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import torch
-from typing import Union, Iterator
+from typing import Union, Iterator, Callable, Dict
 
-from image_patch import ImagePatch
-from vision_processes import forward
+from .image_patch import ImagePatch
 
 
 class VideoSegment:
@@ -27,7 +26,7 @@ class VideoSegment:
         Returns a new VideoSegment containing a trimmed version of the original video at the [start, end] segment.
     """
 
-    def __init__(self, video: torch.Tensor, start: int = None, end: int = None, parent_start=0, queues=None):
+    def __init__(self, config: Dict, forward: Callable, video: torch.Tensor, start: int = None, end: int = None, parent_start=0):
         """Initializes a VideoSegment object by trimming the video at the given [start, end] times and stores the
         start and end times as attributes. If no times are provided, the video is left unmodified, and the times are
         set to the beginning and end of the video.
@@ -41,6 +40,9 @@ class VideoSegment:
         end : int
             An int describing the ending frame in this video segment with respect to the original video.
         """
+
+        self.config = config
+        self.forward = forward
 
         if start is None and end is None:
             self.trimmed_video = video
@@ -58,13 +60,9 @@ class VideoSegment:
         self.num_frames = self.trimmed_video.shape[0]
 
         self.cache = {}
-        self.queues = (None, None) if queues is None else queues
 
         if self.trimmed_video.shape[0] == 0:
             raise Exception("VideoSegment has duration=0")
-
-    def forward(self, model_name, *args, **kwargs):
-        return forward(model_name, *args, queues=self.queues, **kwargs)
 
     def frame_from_index(self, index) -> ImagePatch:
         """Returns the frame at position 'index', as an ImagePatch object."""
@@ -72,7 +70,7 @@ class VideoSegment:
             image = self.trimmed_video[index]
         else:
             image = self.trimmed_video[-1]
-        return ImagePatch(image)
+        return ImagePatch(self.config, self.forward, image)
 
     def trim(self, start: Union[int, None] = None, end: Union[int, None] = None) -> VideoSegment:
         """Returns a new VideoSegment containing a trimmed version of the original video at the [start, end]
@@ -95,12 +93,12 @@ class VideoSegment:
         if end is not None:
             end = min(end, self.num_frames)
 
-        return VideoSegment(self.trimmed_video, start, end, self.start, queues=self.queues)
+        return VideoSegment(self.config, self.forward, self.trimmed_video, start, end, self.start)
 
     def frame_iterator(self) -> Iterator[ImagePatch]:
         """Returns an iterator over the frames in the video segment."""
         for i in range(self.num_frames):
-            yield ImagePatch(self.trimmed_video[i], queues=self.queues)
+            yield ImagePatch(self.config, self.forward, self.trimmed_video[i])
 
     def __repr__(self):
         return "VideoSegment({}, {})".format(self.start, self.end)
