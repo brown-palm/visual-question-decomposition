@@ -108,7 +108,7 @@ class ImagePatch:
         if self.cropped_image.shape[1] == 0 or self.cropped_image.shape[2] == 0:
             raise Exception("ImagePatch has no area")
 
-        self.possible_options = json.loads(pkgutil.get_data(__name__, "data/useful_lists/possible_options.json"))
+        self.possible_options = json.loads(pkgutil.get_data(__name__, "configs/useful_lists/possible_options.json"))
 
     @property
     def original_image(self):

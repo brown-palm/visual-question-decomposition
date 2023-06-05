@@ -17,7 +17,7 @@ setup(
     name="viper",
     description="Implementation of ViperGPT",
     packages=find_packages(),
-    package_data={'viper': ['data/**/*.txt', 'data/**/*.json']},
+    package_data={'viper': ['configs/**/*.txt', 'configs/**/*.json']},
     install_requires=read_requirements("requirements.txt"),
     python_requires=">=3.7",
 )
