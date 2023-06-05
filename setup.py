@@ -16,7 +16,7 @@ def read_requirements(filename: str):
 setup(
     name="viper",
     description="Implementation of ViperGPT",
-    packages=find_packages(where="viper"),
+    packages=find_packages(),
     package_data={'viper': ['data/**/*.txt', 'data/**/*.json']},
     install_requires=read_requirements("requirements.txt"),
     python_requires=">=3.7",
