@@ -203,7 +203,7 @@ class CLIPModel(BaseModel):
     @torch.no_grad()
     def clip_negatives(self, prompt_prefix, negative_categories=None):
         if negative_categories is None:
-            f = pkgutil.get_data(__name__, "configs/useful_lists/random_negatives.txt")
+            f = pkgutil.get_data(__name__.split('.')[0], "configs/useful_lists/random_negatives.txt")
             negative_categories = [x.strip() for x in f.read().decode('utf-8').split()]
         # negative_categories = negative_categories[:1000]
         # negative_categories = ["a cat", "a lamp"]
@@ -593,12 +593,13 @@ class TCLModel(BaseModel):
         from .base_models.tcl.tcl_tokenization_bert import BertTokenizer
 
         super().__init__(gpu_number)
+        bert_config_fp = pkg_resources.resource_filename(__name__.split('.')[0], 'configs/base_models/tcl/config_bert.json')
         config = {
             'image_res': 384,
             'mlm_probability': 0.15,
             'embed_dim': 256,
             'vision_width': 768,
-            'bert_config': pkg_resources.resource_filename(__name__, 'configs/base_models/tcl/config_bert.json'),
+            'bert_config': bert_config_fp,
             'temp': 0.07,
             'queue_size': 65536,
             'momentum': 0.995,
@@ -750,7 +751,7 @@ class GPT3Model(BaseModel):
 
     def __init__(self, gpu_number=0):
         super().__init__(gpu_number=gpu_number)
-        self.qa_prompt = pkgutil.get_data(__name__, "configs/prompts/gpt3_qa.txt").decode('utf-8').strip()
+        self.qa_prompt = pkgutil.get_data(__name__.split('.')[0], "configs/prompts/gpt3_qa.txt").decode('utf-8').strip()
         self.temperature = config['gpt3']['temperature']
         self.n_votes = config['gpt3']['n_votes']
         self.model = config['gpt3']['model']
@@ -1071,7 +1072,7 @@ class XVLMModel(BaseModel):
             normalize,
         ])
 
-        f = pkgutil.get_data(__name__, "configs/useful_lists/random_negatives.txt")
+        f = pkgutil.get_data(__name__.split('.')[0], "configs/useful_lists/random_negatives.txt")
         negative_categories = [x.strip() for x in f.read().decode('utf-8').split()]
 
     @staticmethod
