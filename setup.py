@@ -8,12 +8,14 @@ def read_requirements(filename: str):
         def fix_url_dependencies(req: str) -> str:
             """Pip and setuptools disagree about how URL dependencies should be handled."""
             m = re.match(
-                r"^(git\+)?(https|ssh)://(git@)?github\.com/([\w-]+)/(?P<name>[\w-]+)\.git", req
+                r"^(git\+)?(https|ssh)://(git@)?github\.com/([\w-]+)/(?P<name>[\w-]+)\.git(@([\w-]+))?(#egg=(?P<package_name>[\w-]+))?",
+                req
             )
             if m is None:
                 return req
             else:
-                return f"{m.group('name')} @ {req}"
+                package_name = m.group('package_name') or m.group('name')
+                return f"{package_name} @ {req}"
 
         requirements = []
         for line in requirements_file:
@@ -21,6 +23,7 @@ def read_requirements(filename: str):
             if line.startswith("#") or len(line) <= 0:
                 continue
             requirements.append(fix_url_dependencies(line))
+
     return requirements
 
 
