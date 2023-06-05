@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 
 def read_requirements(filename: str):
@@ -16,7 +16,7 @@ def read_requirements(filename: str):
 setup(
     name="viper",
     description="Implementation of ViperGPT",
-    packages=['viper'],
+    packages=find_packages(where="viper"),
     package_data={'viper': ['data/**/*.txt', 'data/**/*.json']},
     install_requires=read_requirements("requirements.txt"),
     python_requires=">=3.7",
