@@ -749,7 +749,7 @@ class GPT3Model(BaseModel):
 
     def __init__(self, gpu_number=0):
         super().__init__(gpu_number=gpu_number)
-        self.qa_prompt = pkgutil.get_data(__name__, "data/prompts/gpt3/gpt3_qa.txt").decode('utf-8').strip()
+        self.qa_prompt = pkgutil.get_data(__name__, "data/prompts/gpt3_qa.txt").decode('utf-8').strip()
         self.temperature = config['gpt3']['temperature']
         self.n_votes = config['gpt3']['n_votes']
         self.model = config['gpt3']['model']
