@@ -1073,7 +1073,7 @@ class XVLMModel(BaseModel):
         ])
 
         f = pkgutil.get_data(__name__.split('.')[0], "configs/useful_lists/random_negatives.txt")
-        negative_categories = [x.strip() for x in f.read().decode('utf-8').split()]
+        negative_categories = [x.strip() for x in f.decode('utf-8').split()]
 
     @staticmethod
     def pre_caption(caption, max_words):
