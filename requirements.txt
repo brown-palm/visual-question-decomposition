@@ -4,7 +4,7 @@ bitsandbytes==0.38.1
 git+https://github.com/openai/CLIP.git
 decord==0.6.0
 dill==0.3.6
-git+https://github.com/apoorvkh/viper.git@glip
+git+https://github.com/apoorvkh/viper.git@glip#egg=maskrcnn-benchmark
 ipython==8.11.0
 joblib==1.2.0
 kornia==0.6.9
