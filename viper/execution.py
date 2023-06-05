@@ -4,9 +4,10 @@ import ast
 from torchvision import transforms
 from PIL import Image
 import functools
+import inspect
 
-from .image_patch import ImagePatch as ViperImagePatch
-from .configs import config
+from .config import config
+from . import image_patch, vision_models
 
 
 class CompletedExecution(Exception):
@@ -31,23 +32,21 @@ class ReturnTransformer(ast.NodeTransformer):
 
 
 class ViperExecutionModel:
+    # specify model -> GPU map
     def __init__(self):
-        list_models = [
-            m[1]
-            for m in inspect.getmembers(vision_models, inspect.isclass)
-            if vision_models.BaseModel in m[1].__bases__
-        ]
-
         self.model_instances = dict()
         self.to_batch = dict()
 
-        for model_class in list_models:
+        for _, model_class in inspect.getmembers(vision_models, inspect.isclass):
+            if vision_models.BaseModel not in model_class.__bases__:
+                continue
+
             for p in model_class.list_processes():
                 if config['load_models'].get(p, False):
                     self.model_instances[p] = model_class(gpu_number=0)
                     self.to_batch[p] = model_class.to_batch
 
-        self.image_patch_class = functools.partial(ViperImagePatch, config, self.forward)
+        self.image_patch_class = functools.partial(image_patch.ImagePatch, config, self.forward)
 
 
     def forward(self, model_name, *args, **kwargs):
@@ -89,6 +88,14 @@ class ViperExecutionModel:
 
     def execute_code(self, image: Image.Image, code: str) -> Dict:
         ImagePatch = self.image_patch_class
+        import math
+        from .image_patch import (
+            best_image_match,
+            distance,
+            bool_to_yesno,
+            llm_query,
+            coerce_to_numeric,
+        )
 
         execution_result = {}
 

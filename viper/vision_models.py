@@ -22,7 +22,7 @@ from torchvision import transforms
 from typing import List, Union
 import pkgutil
 
-from .configs import config
+from .config import config
 
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
