@@ -36,7 +36,7 @@ class BaseModel(abc.ABC):
     requires_gpu = True
 
     def __init__(self, gpu_number):
-        self.dev = f'cuda:{gpu_number}' if torch.cuda.is_available() == 'cuda' else "cpu"
+        self.dev = f'cuda:{gpu_number}' if torch.cuda.is_available() else "cpu"
 
     @abc.abstractmethod
     def forward(self, *args, **kwargs):
