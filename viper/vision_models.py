@@ -746,7 +746,6 @@ class TCLModel(BaseModel):
 
 class GPT3Model(BaseModel):
     name = 'gpt3'
-    to_batch = False
     requires_gpu = False
 
     def __init__(self, gpu_number=0):
@@ -840,8 +839,7 @@ class GPT3Model(BaseModel):
         return response
 
     def forward(self, prompt, process_name):
-        if not self.to_batch:
-            prompt = [prompt]
+        prompt = [prompt]
         
         if process_name == 'gpt3_qa':
             # if items in prompt are tuples, then we assume it is a question and context
@@ -857,8 +855,7 @@ class GPT3Model(BaseModel):
             else:  # 'gpt3_general', general prompt, has to be given all of it
                 results = self.get_general(prompt)
 
-        if not self.to_batch:
-            results = results[0]
+        results = results[0]
         return results
 
     @classmethod
@@ -947,9 +944,6 @@ class BLIPModel(BaseModel):
         return generated_text
 
     def forward(self, image, question=None, task='caption'):
-        if not self.to_batch:
-            image, question, task = [image], [question], [task]
-
         if len(image) > 0 and 'float' in str(image[0].dtype) and image[0].max() <= 1:
             image = [im * 255 for im in image]
 
@@ -969,8 +963,6 @@ class BLIPModel(BaseModel):
             else:
                 response.append(response_caption.pop(0))
 
-        if not self.to_batch:
-            response = response[0]
         return response
 
 

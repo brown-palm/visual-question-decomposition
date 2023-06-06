@@ -78,7 +78,7 @@ class ViperExecutionModel:
 
         try:
             out = model_instance.forward(*args, **kwargs)
-            if to_batch[model_name]:
+            if self.to_batch[model_name]:
                 out = out[0]
         except Exception as e:
             print(f"Error in {model_name} model:", e)
