@@ -89,6 +89,7 @@ class ViperExecutionModel:
 
     def execute_code(self, image: Image.Image, code: str) -> Dict:
         ImagePatch = self.image_patch_class
+        import numpy as np
         import math
         from .image_patch import (
             best_image_match,
