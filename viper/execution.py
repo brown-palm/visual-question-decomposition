@@ -5,6 +5,7 @@ from torchvision import transforms
 from PIL import Image
 import functools
 import inspect
+import traceback
 
 from .config import config
 from . import image_patch, vision_models
