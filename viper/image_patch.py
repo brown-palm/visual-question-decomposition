@@ -243,7 +243,7 @@ class ImagePatch:
 
         return option_list[selected]
 
-    def simple_query(self, question: str):
+    def simple_query(self, question: str = "What is this?"):
         """Returns the answer to a basic question asked about the image. If no question is provided, returns the answer
         to "What is this?". The questions are about basic perception, and are not meant to be used for complex reasoning
         or external knowledge.
