@@ -1,5 +1,6 @@
 from typing import List, Dict
 import ast
+import pickle
 
 from torchvision import transforms
 from PIL import Image
@@ -123,5 +124,16 @@ class ViperExecutionModel:
         except:
             execution_result["__error__"] = traceback.format_exc()
             print("Execution Error: " + execution_result["__error__"])
+
+        # Remove un-picklable elements from execution_result
+
+        def is_picklable(obj):
+            try:
+                pickle.dumps(obj)
+            except pickle.PicklingError:
+                return False
+            return True
+
+        execution_result = {k:v for k, v in execution_result.items() if is_picklable(v)}
 
         return execution_result
