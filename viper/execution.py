@@ -88,7 +88,7 @@ class ViperExecutionModel:
 
         return out
 
-    def execute_code(self, image: Image.Image, code: str, possible_choices: List[str] = None) -> Dict:
+    def execute_code(self, image: Image.Image, code: str, possible_answers: List[str] = None) -> Dict:
         ImagePatch = self.image_patch_class
         import numpy as np
         import math
