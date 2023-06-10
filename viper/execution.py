@@ -43,7 +43,7 @@ class BoundingBox:
 
 
 def _patches_to_bboxes(o):
-    if isinstance(o, ImagePatch):
+    if isinstance(o, image_patch.ImagePatch):
         return BoundingBox(o.left, o.lower, o.right, o.upper)
     elif isinstance(o, tuple):
         return tuple(_patches_to_bboxes(x) for x in o)
