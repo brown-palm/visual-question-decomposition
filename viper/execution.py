@@ -71,6 +71,7 @@ class ViperExecutionModel:
                     self.to_batch[p] = model_class.to_batch
 
         self.image_patch_class = functools.partial(image_patch.ImagePatch, config, self.forward)
+        self.best_image_match_fn = functools.partial(image_patch.best_image_match, config)
 
 
     def forward(self, model_name, *args, **kwargs):
@@ -111,11 +112,11 @@ class ViperExecutionModel:
         return out
 
     def execute_code(self, image: Image.Image, code: str, possible_answers: List[str] = None) -> Dict:
-        ImagePatch = self.image_patch_class
         import numpy as np
         import math
+        ImagePatch = self.image_patch_class
+        best_image_match = self.best_image_match_fn
         from .image_patch import (
-            best_image_match,
             distance,
             bool_to_yesno,
             llm_query,
