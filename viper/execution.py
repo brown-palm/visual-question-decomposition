@@ -1,6 +1,7 @@
 from typing import List, Dict
 import ast
 import pickle
+from dataclasses import dataclass
 
 from torchvision import transforms
 from PIL import Image
@@ -31,6 +32,27 @@ class ReturnTransformer(ast.NodeTransformer):
                 )
             ),
         ]
+
+
+@dataclass
+class BoundingBox:
+    left: int
+    lower: int
+    right: int
+    upper: int
+
+
+def _patches_to_bboxes(o):
+    if isinstance(o, ImagePatch):
+        return BoundingBox(o.left, o.lower, o.right, o.upper)
+    elif isinstance(o, tuple):
+        return tuple(_patches_to_bboxes(x) for x in o)
+    elif isinstance(o, list):
+        return [_patches_to_bboxes(x) for x in o]
+    elif isinstance(o, dict):
+        return {k:_patches_to_bboxes(v) for k, v in o.items()}
+    else:
+        return o
 
 
 class ViperExecutionModel:
@@ -125,8 +147,10 @@ class ViperExecutionModel:
             execution_result["__error__"] = traceback.format_exc()
             print("Execution Error: " + execution_result["__error__"])
 
-        # Remove un-picklable elements from execution_result
+        # Cast image patches to BoundingBox class
+        execution_result = {k:_patches_to_bboxes(v) for k, v in execution_result.items()}
 
+        # Remove un-picklable elements from execution_result
         def is_picklable(obj):
             try:
                 pickle.dumps(obj)
