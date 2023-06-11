@@ -409,7 +409,7 @@ def bool_to_yesno(bool_answer: bool) -> str:
     return "yes" if bool_answer else "no"
 
 
-def llm_query(query, context=None, long_answer=True):
+def llm_query(forward, query, context=None, long_answer=True):
     """Answers a text question using GPT-3. The input question is always a formatted string with a variable in it.
 
     Parameters

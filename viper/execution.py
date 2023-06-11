@@ -71,6 +71,7 @@ class ViperExecutionModel:
                     self.to_batch[p] = model_class.to_batch
 
         self.image_patch_class = functools.partial(image_patch.ImagePatch, config, self.forward)
+        self.llm_query_fn = functools.partial(image_patch.llm_query, self.forward)
         self.best_image_match_fn = functools.partial(image_patch.best_image_match, config)
 
 
@@ -115,11 +116,11 @@ class ViperExecutionModel:
         import numpy as np
         import math
         ImagePatch = self.image_patch_class
+        llm_query = self.llm_query_fn
         best_image_match = self.best_image_match_fn
         from .image_patch import (
             distance,
             bool_to_yesno,
-            llm_query,
             coerce_to_numeric,
         )
 
