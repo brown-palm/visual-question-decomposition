@@ -3,7 +3,7 @@ requires = ["pdm-backend"]
 build-backend = "pdm.backend"
 
 [tool.pdm.build]
-includes = ["viper/", "viper/configs/**/*.json", "viper/configs/**/*.txt"]
+includes = ["viper/"]
 
 [project]
 name = "viper"
