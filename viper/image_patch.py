@@ -10,8 +10,8 @@ from torchvision import transforms
 from torchvision.ops import box_iou
 from typing import Union, List
 from word2number import w2n
-import json
-import pkgutil
+
+from . import utils
 
 
 class ImagePatch:
@@ -108,8 +108,7 @@ class ImagePatch:
         if self.cropped_image.shape[1] == 0 or self.cropped_image.shape[2] == 0:
             raise Exception("ImagePatch has no area")
 
-        possible_options_bytes = pkgutil.get_data(__name__.split('.')[0], "configs/useful_lists/possible_options.json")
-        self.possible_options = json.loads(possible_options_bytes)
+        self.possible_options = utils.possible_options
 
     @property
     def original_image(self):
@@ -173,20 +172,14 @@ class ImagePatch:
                 filtered_patches.append(patch)
         return len(filtered_patches) > 0
 
-    def _score(self, category: str, negative_categories=None, model='clip') -> float:
+    def _score(self, category: str, negative_categories=None, model='xvlm') -> float:
         """
         Returns a binary score for the similarity between the image and the category.
         The negative categories are used to compare to (score is relative to the scores of the negative categories).
         """
-        if model == 'clip':
-            res = self.forward('clip', self.cropped_image, category, task='score',
-                               negative_categories=negative_categories)
-        elif model == 'tcl':
-            res = self.forward('tcl', self.cropped_image, category, task='score')
-        else:  # xvlm
-            task = 'binary_score' if negative_categories is not None else 'score'
-            res = self.forward('xvlm', self.cropped_image, category, task=task, negative_categories=negative_categories)
-            res = res.item()
+        task = 'binary_score' if negative_categories is not None else 'score'
+        res = self.forward('xvlm', self.cropped_image, category, task=task, negative_categories=negative_categories)
+        res = res.item()
 
         return res
 
@@ -205,16 +198,9 @@ class ImagePatch:
             A string describing the property to be checked.
         """
         name = f"{attribute} {object_name}"
-        model = self.config['verify_property']['model']
         negative_categories = [f"{att} {object_name}" for att in self.possible_options['attributes']]
-        if model == 'clip':
-            return self._detect(name, negative_categories=negative_categories,
-                                thresh=self.config['verify_property']['thresh_clip'], model='clip')
-        elif model == 'tcl':
-            return self._detect(name, thresh=self.config['verify_property']['thresh_tcl'], model='tcl')
-        else:  # 'xvlm'
-            return self._detect(name, negative_categories=negative_categories,
-                                thresh=self.config['verify_property']['thresh_xvlm'], model='xvlm')
+        return self._detect(name, negative_categories=negative_categories,
+                            thresh=self.config['xvlm_verify_property_thresh'], model='xvlm')
 
     def best_text_match(self, option_list: list[str] = None, prefix: str = None) -> str:
         """Returns the string that best matches the image.
@@ -229,17 +215,12 @@ class ImagePatch:
         if prefix is not None:
             option_list_to_use = [prefix + " " + option for option in option_list]
 
-        model_name = self.config['best_match_model']
         image = self.cropped_image
         text = option_list_to_use
-        if model_name in ('clip', 'tcl'):
-            selected = self.forward(model_name, image, text, task='classify')
-        elif model_name == 'xvlm':
-            res = self.forward(model_name, image, text, task='score')
-            res = res.argmax().item()
-            selected = res
-        else:
-            raise NotImplementedError
+
+        res = self.forward('xvlm', image, text, task='score')
+        res = res.argmax().item()
+        selected = res
 
         return option_list[selected]
 
@@ -348,15 +329,9 @@ def best_image_match(config: Dict, list_patches: list[ImagePatch], content: List
     if len(list_patches) == 0:
         return None
 
-    model = config['best_match_model']
-
     scores = []
     for cont in content:
-        if model == 'clip':
-            res = list_patches[0].forward(model, [p.cropped_image for p in list_patches], cont, task='compare',
-                                          return_scores=True)
-        else:
-            res = list_patches[0].forward(model, [p.cropped_image for p in list_patches], cont, task='score')
+        res = list_patches[0].forward('xvlm', [p.cropped_image for p in list_patches], cont, task='score')
         scores.append(res)
     scores = torch.stack(scores).mean(dim=0)
     scores = scores.argmax().item()  # Argmax over all image patches

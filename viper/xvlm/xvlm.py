@@ -9,11 +9,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributed as dist
 
-from functools import partial
 import json
-import pkg_resources
 
-from .vit import VisionTransformer, interpolate_pos_embed
+from .bert_config import bert_config
+from .vit import interpolate_pos_embed
 from .swin_transformer import SwinTransformer, interpolate_relative_pos_embed
 from .xbert import BertConfig, BertForMaskedLM, BertModel
 
@@ -91,8 +90,7 @@ def build_vision_encoder(vision_config, load_params=False):
 def build_text_encoder(config, vision_width, load_text_params=False, use_mlm_loss=False, config_text=None):
     init_params = []  # train from scratch with larger lr
 
-    config_fp = pkg_resources.resource_filename(__name__.split('.')[0], 'configs/base_models/xvlm/config_bert.json')
-    config_text = BertConfig.from_json_file(config_fp)
+    config_text = BertConfig(**bert_config)
     config_text.encoder_width = vision_width
 
     if use_mlm_loss:  # for pre-training, load_text_params by default (otherwise notimplemented)

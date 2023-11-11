@@ -11,7 +11,6 @@ import os
 import re
 import timeit
 import torch
-import torchvision
 import warnings
 from PIL import Image
 from collections import Counter
@@ -19,11 +18,10 @@ from itertools import chain
 from torch import hub
 from torch.nn import functional as F
 from torchvision import transforms
-from typing import List, Union
-import pkgutil
-import pkg_resources
+from typing import Union
 
 from .config import config
+from . import utils
 
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -69,28 +67,6 @@ class BaseModel(abc.ABC):
 # ------------------------------ Specific models ---------------------------- #
 
 
-class ObjectDetector(BaseModel):
-    name = 'object_detector'
-
-    def __init__(self, gpu_number=0):
-        super().__init__(gpu_number)
-
-        detection_model = hub.load('facebookresearch/detr', 'detr_resnet50', pretrained=True).to(self.dev)
-        detection_model.eval()
-
-        self.detection_model = detection_model
-
-    @torch.no_grad()
-    def forward(self, image: torch.Tensor):
-        """get_object_detection_bboxes"""
-        input_batch = image.to(self.dev).unsqueeze(0)  # create a mini-batch as expected by the model
-        detections = self.detection_model(input_batch)
-        p = detections['pred_boxes']
-        p = torch.stack([p[..., 0], 1 - p[..., 3], p[..., 2], 1 - p[..., 1]], -1)  # [left, lower, right, upper]
-        detections['pred_boxes'] = p
-        return detections
-
-
 class DepthEstimationModel(BaseModel):
     name = 'depth'
 
@@ -129,268 +105,6 @@ class DepthEstimationModel(BaseModel):
         return to_return  # To save: plt.imsave(path_save, prediction.cpu().numpy())
 
 
-class CLIPModel(BaseModel):
-    name = 'clip'
-
-    def __init__(self, gpu_number=0, version="ViT-L/14@336px"):  # @336px
-        super().__init__(gpu_number)
-
-        import clip
-        self.clip = clip
-
-        model, preprocess = clip.load(version, device=self.dev)
-        model.eval()
-        model.requires_grad_ = False
-        self.model = model
-        self.negative_text_features = None
-        self.transform = self.get_clip_transforms_from_tensor(336 if "336" in version else 224)
-
-    # @staticmethod
-    def _convert_image_to_rgb(self, image):
-        return image.convert("RGB")
-
-    # @staticmethod
-    def get_clip_transforms_from_tensor(self, n_px=336):
-        return transforms.Compose([
-            transforms.ToPILImage(),
-            transforms.Resize(n_px, interpolation=transforms.InterpolationMode.BICUBIC),
-            transforms.CenterCrop(n_px),
-            self._convert_image_to_rgb,
-            transforms.ToTensor(),
-            transforms.Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711)),
-        ])
-
-    @torch.no_grad()
-    def binary_score(self, image: torch.Tensor, prompt, negative_categories=None):
-        is_video = isinstance(image, torch.Tensor) and image.ndim == 4
-        if is_video:  # video
-            image = torch.stack([self.transform(image[i]) for i in range(image.shape[0])], dim=0)
-        else:
-            image = self.transform(image).unsqueeze(0).to(self.dev)
-
-        prompt_prefix = "photo of "
-        prompt = prompt_prefix + prompt
-
-        if negative_categories is None:
-            if self.negative_text_features is None:
-                self.negative_text_features = self.clip_negatives(prompt_prefix)
-            negative_text_features = self.negative_text_features
-        else:
-            negative_text_features = self.clip_negatives(prompt_prefix, negative_categories)
-
-        text = self.clip.tokenize([prompt]).to(self.dev)
-
-        image_features = self.model.encode_image(image.to(self.dev))
-        image_features = F.normalize(image_features, dim=-1)
-
-        pos_text_features = self.model.encode_text(text)
-        pos_text_features = F.normalize(pos_text_features, dim=-1)
-
-        text_features = torch.concat([pos_text_features, negative_text_features], axis=0)
-
-        # run competition where we do a binary classification
-        # between the positive and all the negatives, then take the mean
-        sim = (100.0 * image_features @ text_features.T).squeeze(dim=0)
-        if is_video:
-            query = sim[..., 0].unsqueeze(-1).broadcast_to(sim.shape[0], sim.shape[-1] - 1)
-            others = sim[..., 1:]
-            res = F.softmax(torch.stack([query, others], dim=-1), dim=-1)[..., 0].mean(-1)
-        else:
-            res = F.softmax(torch.cat((sim[0].broadcast_to(1, sim.shape[0] - 1),
-                                       sim[1:].unsqueeze(0)), dim=0), dim=0)[0].mean()
-        return res
-
-    @torch.no_grad()
-    def clip_negatives(self, prompt_prefix, negative_categories=None):
-        if negative_categories is None:
-            f = pkgutil.get_data(__name__.split('.')[0], "configs/useful_lists/random_negatives.txt")
-            negative_categories = [x.strip() for x in f.read().decode('utf-8').split()]
-        # negative_categories = negative_categories[:1000]
-        # negative_categories = ["a cat", "a lamp"]
-        negative_categories = [prompt_prefix + x for x in negative_categories]
-        negative_tokens = self.clip.tokenize(negative_categories).to(self.dev)
-
-        negative_text_features = self.model.encode_text(negative_tokens)
-        negative_text_features = F.normalize(negative_text_features, dim=-1)
-
-        return negative_text_features
-
-    @torch.no_grad()
-    def classify(self, image: Union[torch.Tensor, list], categories: list[str], return_index=True):
-        is_list = isinstance(image, list)
-        if is_list:
-            assert len(image) == len(categories)
-            image = [self.transform(x).unsqueeze(0) for x in image]
-            image_clip = torch.cat(image, dim=0).to(self.dev)
-        elif len(image.shape) == 3:
-            image_clip = self.transform(image).to(self.dev).unsqueeze(0)
-        else:  # Video (process images separately)
-            image_clip = torch.stack([self.transform(x) for x in image], dim=0).to(self.dev)
-
-        # if len(image_clip.shape) == 3:
-        #     image_clip = image_clip.unsqueeze(0)
-
-        prompt_prefix = "photo of "
-        categories = [prompt_prefix + x for x in categories]
-        categories = self.clip.tokenize(categories).to(self.dev)
-
-        text_features = self.model.encode_text(categories)
-        text_features = F.normalize(text_features, dim=-1)
-
-        image_features = self.model.encode_image(image_clip)
-        image_features = F.normalize(image_features, dim=-1)
-
-        if image_clip.shape[0] == 1:
-            # get category from image
-            softmax_arg = image_features @ text_features.T  # 1 x n
-        else:
-            if is_list:
-                # get highest category-image match with n images and n corresponding categories
-                softmax_arg = (image_features @ text_features.T).diag().unsqueeze(0)  # n x n -> 1 x n
-            else:
-                softmax_arg = (image_features @ text_features.T)
-
-        similarity = (100.0 * softmax_arg).softmax(dim=-1).squeeze(0)
-        if not return_index:
-            return similarity
-        else:
-            result = torch.argmax(similarity, dim=-1)
-            if result.shape == ():
-                result = result.item()
-            return result
-
-    @torch.no_grad()
-    def compare(self, images: list[torch.Tensor], prompt, return_scores=False):
-        images = [self.transform(im).unsqueeze(0).to(self.dev) for im in images]
-        images = torch.cat(images, dim=0)
-
-        prompt_prefix = "photo of "
-        prompt = prompt_prefix + prompt
-
-        text = self.clip.tokenize([prompt]).to(self.dev)
-
-        image_features = self.model.encode_image(images.to(self.dev))
-        image_features = F.normalize(image_features, dim=-1)
-
-        text_features = self.model.encode_text(text)
-        text_features = F.normalize(text_features, dim=-1)
-
-        sim = (image_features @ text_features.T).squeeze(dim=-1)  # Only one text, so squeeze
-
-        if return_scores:
-            return sim
-        res = sim.argmax()
-        return res
-
-    def forward(self, image, prompt, task='score', return_index=True, negative_categories=None, return_scores=False):
-        if task == 'classify':
-            categories = prompt
-            clip_sim = self.classify(image, categories, return_index=return_index)
-            out = clip_sim
-        elif task == 'score':
-            clip_score = self.binary_score(image, prompt, negative_categories=negative_categories)
-            out = clip_score
-        else:  # task == 'compare'
-            idx = self.compare(image, prompt, return_scores)
-            out = idx
-        if not isinstance(out, int):
-            out = out.cpu()
-        return out
-
-
-class MaskRCNNModel(BaseModel):
-    name = 'maskrcnn'
-
-    def __init__(self, gpu_number=0, threshold=config['detect_thresholds']['maskrcnn']):
-        super().__init__(gpu_number)
-        obj_detect = torchvision.models.detection.maskrcnn_resnet50_fpn_v2(weights='COCO_V1').to(self.dev)
-        obj_detect.eval()
-        obj_detect.requires_grad_(False)
-        self.categories = torchvision.models.detection.MaskRCNN_ResNet50_FPN_V2_Weights.COCO_V1.meta['categories']
-        self.obj_detect = obj_detect
-        self.threshold = threshold
-
-    def prepare_image(self, image):
-        image = image.to(self.dev)
-        return image
-
-    @torch.no_grad()
-    def detect(self, images: torch.Tensor, return_labels=True):
-        if type(images) != list:
-            images = [images]
-        images = [self.prepare_image(im) for im in images]
-        detections = self.obj_detect(images)
-        for i in range(len(images)):
-            height = detections[i]['masks'].shape[-2]
-            # Just return boxes (no labels no masks, no scores) with scores > threshold
-            if return_labels:  # In the current implementation, we only return labels
-                d_i = detections[i]['labels'][detections[i]['scores'] > self.threshold]
-                detections[i] = set([self.categories[d] for d in d_i])
-            else:
-                d_i = detections[i]['boxes'][detections[i]['scores'] > self.threshold]
-                # Return [left, lower, right, upper] instead of [left, upper, right, lower]
-                detections[i] = torch.stack([d_i[:, 0], height - d_i[:, 3], d_i[:, 2], height - d_i[:, 1]], dim=1)
-
-        return detections
-
-    def forward(self, image, return_labels=False):
-        obj_detections = self.detect(image, return_labels)
-        # Move to CPU before sharing. Alternatively we can try cloning tensors in CUDA, but may not work
-        obj_detections = [(v.to('cpu') if isinstance(v, torch.Tensor) else list(v)) for v in obj_detections]
-        return obj_detections
-
-
-class OwlViTModel(BaseModel):
-    name = 'owlvit'
-
-    def __init__(self, gpu_number=0, threshold=config['detect_thresholds']['owlvit']):
-        super().__init__(gpu_number)
-
-        from transformers import OwlViTProcessor, OwlViTForObjectDetection
-
-        processor = OwlViTProcessor.from_pretrained("google/owlvit-base-patch32")
-        model = OwlViTForObjectDetection.from_pretrained("google/owlvit-base-patch32")
-        model.eval()
-        model.requires_grad_(False)
-        self.model = model.to(self.dev)
-        self.processor = processor
-        self.threshold = threshold
-
-    @torch.no_grad()
-    def forward(self, image: torch.Tensor, text: List[str], return_labels: bool = False):
-        if isinstance(image, list):
-            raise TypeError("image has to be a torch tensor, not a list")
-        if isinstance(text, str):
-            text = [text]
-        text_original = text
-        text = ['a photo of a ' + t for t in text]
-        inputs = self.processor(text=text, images=image, return_tensors="pt") # padding="longest",
-        inputs = {k: v.to(self.dev) for k, v in inputs.items()}
-        outputs = self.model(**inputs)
-
-        # Target image sizes (height, width) to rescale box predictions [batch_size, 2]
-        target_sizes = torch.tensor([image.shape[1:]]).to(self.dev)
-        # Convert outputs (bounding boxes and class logits) to COCO API
-        results = self.processor.post_process(outputs=outputs, target_sizes=target_sizes)
-
-        boxes, scores, labels = results[0]["boxes"], results[0]["scores"], results[0]["labels"]
-
-        indices_good = scores > self.threshold
-        boxes = boxes[indices_good]
-
-        # Change to format where large "upper"/"lower" means more up
-        left, upper, right, lower = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
-        height = image.shape[-2]
-        boxes = torch.stack([left, height - lower, right, height - upper], -1)
-
-        if return_labels:
-            labels = labels[indices_good]
-            labels = [text_original[lab].re('a photo of a ') for lab in labels]
-            return boxes, labels
-
-        return boxes.cpu()  # [x_min, y_min, x_max, y_max]
-
-
 class GLIPModel(BaseModel):
     name = 'glip'
 
@@ -415,7 +129,7 @@ class GLIPModel(BaseModel):
 
                 kwargs = {
                     'min_image_size': 800,
-                    'confidence_threshold': config['detect_thresholds']['glip'],
+                    'confidence_threshold': config['glip_detect_threshold'],
                     'show_mask_heatmaps': False
                 }
 
@@ -583,174 +297,13 @@ class GLIPModel(BaseModel):
         return self.glip_demo.forward(*args, **kwargs)
 
 
-class TCLModel(BaseModel):
-    name = 'tcl'
-
-    def __init__(self, gpu_number=0):
-
-        from .base_models.tcl.tcl_model_pretrain import ALBEF
-        from .base_models.tcl.tcl_vit import interpolate_pos_embed
-        from .base_models.tcl.tcl_tokenization_bert import BertTokenizer
-
-        super().__init__(gpu_number)
-        bert_config_fp = pkg_resources.resource_filename(__name__.split('.')[0], 'configs/base_models/tcl/config_bert.json')
-        config = {
-            'image_res': 384,
-            'mlm_probability': 0.15,
-            'embed_dim': 256,
-            'vision_width': 768,
-            'bert_config': bert_config_fp,
-            'temp': 0.07,
-            'queue_size': 65536,
-            'momentum': 0.995,
-        }
-
-        text_encoder = 'bert-base-uncased'
-        checkpoint_path = f'{hub.get_dir()}/viper/TCL_4M.pth'
-
-        self.tokenizer = BertTokenizer.from_pretrained(text_encoder)
-
-        with warnings.catch_warnings():
-            model = ALBEF(config=config, text_encoder=text_encoder, tokenizer=self.tokenizer)
-
-            checkpoint = torch.load(checkpoint_path, map_location='cpu')
-            state_dict = checkpoint['model']
-
-            # reshape positional embedding to accomodate for image resolution change
-            pos_embed_reshaped = interpolate_pos_embed(state_dict['visual_encoder.pos_embed'], model.visual_encoder)
-            state_dict['visual_encoder.pos_embed'] = pos_embed_reshaped
-            m_pos_embed_reshaped = interpolate_pos_embed(state_dict['visual_encoder_m.pos_embed'],
-                                                         model.visual_encoder_m)
-            state_dict['visual_encoder_m.pos_embed'] = m_pos_embed_reshaped
-            model.load_state_dict(state_dict, strict=False)
-
-        self.model = model.to(self.dev)
-        self.model.eval()
-
-        normalize = transforms.Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))
-        self.test_transform = transforms.Compose([
-            transforms.Resize((config['image_res'], config['image_res']), interpolation=Image.BICUBIC),
-            transforms.ToTensor(),
-            normalize,
-        ])
-
-        self.negative_text_features = None
-
-    def transform(self, image):
-        image = transforms.ToPILImage()(image)
-        image = self.test_transform(image)
-        return image
-
-    def prepare_image(self, image):
-        image = self.transform(image)
-        image = image.unsqueeze(0)
-        image = image.to(self.dev)
-        return image
-
-    @torch.no_grad()
-    def binary_score(self, images: Union[list[torch.Tensor], torch.Tensor], prompt):
-        single_image = False
-        if isinstance(images, torch.Tensor):
-            single_image = True
-            images = [images]
-        images = [self.prepare_image(im) for im in images]
-        images = torch.cat(images, dim=0)
-
-        first_words = ['description', 'caption', 'alt text']
-        second_words = ['photo', 'image', 'picture']
-        options = [f'{fw}: {sw} of a' for fw in first_words for sw in second_words]
-
-        prompts = [f'{option} {prompt}' for option in options]
-
-        text_input = self.tokenizer(prompts, padding='max_length', truncation=True, max_length=30, return_tensors="pt") \
-            .to(self.dev)
-        text_output = self.model.text_encoder(text_input.input_ids, attention_mask=text_input.attention_mask,
-                                              mode='text')
-        text_feats = text_output  # .last_hidden_state
-        text_atts = text_input.attention_mask
-
-        image_feats = self.model.visual_encoder(images)
-
-        img_len = image_feats.shape[0]
-        text_len = text_feats.shape[0]
-        image_feats = image_feats.unsqueeze(1).repeat(1, text_len, 1, 1).view(-1, *image_feats.shape[-2:])
-        text_feats = text_feats.unsqueeze(0).repeat(img_len, 1, 1, 1).view(-1, *text_feats.shape[-2:])
-        text_atts = text_atts.unsqueeze(0).repeat(img_len, 1, 1).view(-1, *text_atts.shape[-1:])
-
-        image_feats_att = torch.ones(image_feats.size()[:-1], dtype=torch.long).to(self.dev)
-        output = self.model.text_encoder(encoder_embeds=text_feats, attention_mask=text_atts,
-                                         encoder_hidden_states=image_feats, encoder_attention_mask=image_feats_att,
-                                         return_dict=True, mode='fusion')
-
-        scores = self.model.itm_head(output[:, 0, :])[:, 1]
-        scores = scores.view(img_len, text_len)
-        score = scores.sigmoid().max(-1)[0]
-
-        if single_image:
-            score = score.item()
-
-        return score
-
-    @torch.no_grad()
-    def classify(self, image, texts, return_index=True):
-        if isinstance(image, list):
-            assert len(image) == len(texts)
-            image = [self.transform(x).unsqueeze(0) for x in image]
-            image_tcl = torch.cat(image, dim=0).to(self.dev)
-        else:
-            image_tcl = self.prepare_image(image)
-
-        text_input = self.tokenizer(texts, padding='max_length', truncation=True, max_length=30, return_tensors="pt") \
-            .to(self.dev)
-        text_output = self.model.text_encoder(text_input.input_ids, attention_mask=text_input.attention_mask,
-                                              mode='text')
-        text_feats = text_output  # .last_hidden_state
-        text_embeds = F.normalize(self.model.text_proj(text_feats[:, 0, :]))
-        text_atts = text_input.attention_mask
-
-        image_feats = self.model.visual_encoder(image_tcl)
-        image_embeds = self.model.vision_proj(image_feats[:, 0, :])
-        image_embeds = F.normalize(image_embeds, dim=-1)
-
-        # In the original code, this is only used to select the topk pairs, to not compute ITM head on all pairs.
-        # But other than that, not used
-        sims_matrix = image_embeds @ text_embeds.t()
-        sims_matrix_t = sims_matrix.t()
-
-        # Image-Text Matching (ITM): Binary classifier for every image-text pair
-        # Only one direction, because we do not filter bet t2i, i2t, and do all pairs
-
-        image_feats_att = torch.ones(image_feats.size()[:-1], dtype=torch.long).to(self.dev)
-        output = self.model.text_encoder(encoder_embeds=text_feats, attention_mask=text_atts,
-                                         encoder_hidden_states=image_feats, encoder_attention_mask=image_feats_att,
-                                         return_dict=True, mode='fusion')
-
-        score_matrix = self.model.itm_head(output[:, 0, :])[:, 1]
-
-        if not return_index:
-            return score_matrix
-        else:
-            return torch.argmax(score_matrix).item()
-
-    def forward(self, image, texts, task='classify', return_index=True):
-        if task == 'classify':
-            best_text = self.classify(image, texts, return_index=return_index)
-            out = best_text
-        else:  # task == 'score':  # binary_score
-            score = self.binary_score(image, texts)
-            out = score
-        if isinstance(out, torch.Tensor):
-            out = out.cpu()
-        return out
-
-
 class GPT3Model(BaseModel):
     name = 'gpt3'
     requires_gpu = False
 
     def __init__(self, gpu_number=0):
         super().__init__(gpu_number=gpu_number)
-        self.qa_prompt = pkgutil.get_data(__name__.split('.')[0], "configs/prompts/gpt3_qa.txt").decode('utf-8').strip()
+        self.qa_prompt = utils.gpt3_qa
         self.temperature = config['gpt3']['temperature']
         self.n_votes = config['gpt3']['n_votes']
         self.model = config['gpt3']['model']
@@ -874,8 +427,7 @@ class BLIPModel(BaseModel):
         super().__init__(gpu_number)
 
         # from lavis.models import load_model_and_preprocess
-        from transformers import BlipProcessor, BlipForConditionalGeneration, Blip2Processor, \
-            Blip2ForConditionalGeneration
+        from transformers import Blip2Processor, Blip2ForConditionalGeneration
 
         # https://huggingface.co/models?sort=downloads&search=Salesforce%2Fblip2-
         assert blip_v2_model_type in ['blip2-flan-t5-xxl', 'blip2-flan-t5-xl', 'blip2-opt-2.7b', 'blip2-opt-6.7b',
@@ -966,59 +518,12 @@ class BLIPModel(BaseModel):
         return response
 
 
-class SaliencyModel(BaseModel):
-    name = 'saliency'
-
-    def __init__(self, gpu_number=0):
-
-        from .base_models.inspyrenet.saliency_transforms import get_transform
-        from .base_models.inspyrenet.InSPyReNet import InSPyReNet
-        from .base_models.inspyrenet.backbones.SwinTransformer import SwinB
-
-        # These parameters are for the Plus Ultra LR model
-        super().__init__(gpu_number)
-        depth = 64
-        pretrained = True
-        base_size = [384, 384]
-        kwargs = {'name': 'InSPyReNet_SwinB', 'threshold': 512}
-        swin_model_dir = f'{hub.get_dir()}/viper/swin'
-        model = InSPyReNet(SwinB(pretrained=pretrained, path_pretrained_models=swin_model_dir),
-                            [128, 128, 256, 512, 1024], depth, base_size, **kwargs)
-        model.load_state_dict(torch.load(f'{hub.get_dir()}/viper/saliency_inspyrenet_plus_ultra/latest.pth',
-                                            map_location=torch.device('cpu')), strict=True)
-        model = model.to(self.dev)
-        model.eval()
-
-        self.model = model
-        self.transform_pil = transforms.ToPILImage()
-        self.transform = get_transform({
-            'static_resize': {'size': [384, 384]},
-            'dynamic_resize': {'L': 1280},
-            'tonumpy': None,
-            'normalize': {'mean': [0.485, 0.456, 0.406], 'std': [0.229, 0.224, 0.225]},
-            'totensor': None
-        })
-
-    @torch.no_grad()
-    def forward(self, image):
-        image_t = self.transform({'image': self.transform_pil(image)})
-        image_t['image_resized'] = image_t['image_resized'].unsqueeze(0).to(self.dev)
-        image_t['image'] = image_t['image'].unsqueeze(0).to(self.dev)
-        pred = self.model(image_t)['pred']
-        pred_resized = F.interpolate(pred, image.shape[1:], mode='bilinear', align_corners=True)[0, 0]
-        mask_foreground = pred_resized < 0.5
-        image_masked = image.clone()
-        image_masked[:, mask_foreground] = 0
-
-        return image_masked
-
-
 class XVLMModel(BaseModel):
     name = 'xvlm'
 
     def __init__(self, gpu_number=0):
 
-        from .base_models.xvlm.xvlm import XVLMBase
+        from .xvlm.xvlm import XVLMBase
         from transformers import BertTokenizer
 
         super().__init__(gpu_number)
@@ -1063,9 +568,6 @@ class XVLMModel(BaseModel):
             transforms.ToTensor(),
             normalize,
         ])
-
-        f = pkgutil.get_data(__name__.split('.')[0], "configs/useful_lists/random_negatives.txt")
-        negative_categories = [x.strip() for x in f.decode('utf-8').split()]
 
     @staticmethod
     def pre_caption(caption, max_words):

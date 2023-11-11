@@ -1,4 +1,4 @@
-{
+bert_config = {
   "architectures": [
     "BertForMaskedLM"
   ],
@@ -17,5 +17,5 @@
   "type_vocab_size": 2,
   "vocab_size": 30522,
   "fusion_layer": 6,
-  "encoder_width": 768
+  "encoder_width": 1024
 }

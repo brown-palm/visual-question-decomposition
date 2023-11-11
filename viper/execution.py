@@ -3,7 +3,6 @@ import ast
 import pickle
 from dataclasses import dataclass
 
-from torchvision import transforms
 from PIL import Image
 import functools
 import inspect
@@ -66,7 +65,7 @@ class ViperExecutionModel:
                 continue
 
             for p in model_class.list_processes():
-                if config['load_models'].get(p, False):
+                if p in config['models']:
                     self.model_instances[p] = model_class(gpu_number=0)
                     self.to_batch[p] = model_class.to_batch
 
