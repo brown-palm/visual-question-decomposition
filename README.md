@@ -1,32 +1,14 @@
 # GLIP: Grounded Language-Image Pre-training  
 
-## What this repo is
-
-This is an updated implementation of GLIP (https://github.com/microsoft/GLIP) that should be compatible with modern versions of PyTorch. It was originally made for the ViperGPT project (https://github.com/cvlab-columbia/viper), but it should be a drop-in replacement for the original GLIP code anywhere else you might want to use it. 
-
-The CUDA kernels in the maskrcnn_benchmark library used the old API for tensor manipulations, THC, but this has been removed, raising errors in PyTorch > 1.13; here it is replaced with Aten, the newer alternative.
-
-If you find this code useful, it would be nice if you could cite the ViperGPT paper it was developed for:
-
-```
-@article{surismenon2023vipergpt,
-    title={ViperGPT: Visual Inference via Python Execution for Reasoning},
-    author={D\'idac Sur\'is and Sachit Menon and Carl Vondrick},
-    journal={arXiv preprint arXiv:2303.08128},
-    year={2023}
-}
-```
-(e.g., in implementation details or similar). 
-
-
-The original README for Microsoft's GLIP repo is reproduced below.
-
-
 
 <img src="docs/lead.png" width="800"> 
 
 
 ## Updates
+* 11/11/2023: Codebase now supports pip installation (@apoorvkh): `pip install 'maskrcnn_benchmark @ git+https://github.com/brown-palm/visual-question-decomposition.git@glip'`
+
+* 03/29/2023: Updated for modern versions of PyTorch. Originally made for the ViperGPT project (https://github.com/cvlab-columbia/viper), but it should be a drop-in replacement for the original GLIP code anywhere else you might want to use it. The CUDA kernels in the maskrcnn_benchmark library used the old API for tensor manipulations, THC, but this has been removed, raising errors in PyTorch > 1.13; here it is replaced with Aten, the newer alternative.
+
 * 01/17/2023: From image understanding to image generation for open-set grounding? Check out [**GLIGEN (Grounded Language-to-Image Generation)**](https://gligen.github.io/)
   - GLIGEN:  (box, concept) $\rightarrow$ image  ||  GLIP:    image $\rightarrow$ (box, concept)
 

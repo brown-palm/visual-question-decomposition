@@ -1,0 +1,34 @@
+[build-system]
+requires = ["pdm-backend", "setuptools", "wheel", "torch"]
+build-backend = "pdm.backend"
+
+[tool.pdm.build]
+includes = ["maskrcnn_benchmark/"]
+run-setuptools = true
+
+[project]
+name = "maskrcnn_benchmark"
+version = "1.0.0"
+description = "object detection in pytorch"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = []
+dependencies = [
+    "einops",
+    "ftfy",
+    "inflect",
+    "nltk",
+    "opencv-python-headless",
+    "prettytable",
+    "pycocotools",
+    "pymongo",
+    "scipy",
+    "shapely",
+    "tensorboardX",
+    "timm",
+    "torch",
+    "torchvision",
+    "transformers",
+    "yacs"
+]
