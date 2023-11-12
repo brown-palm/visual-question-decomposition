@@ -10,24 +10,24 @@ name = "viper"
 version = "1.0.0"
 description = "ViperGPT execution engine"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.9"
 license = {text = "MIT"}
 authors = []
 dependencies = [
     "accelerate==0.18.0",
     "bitsandbytes==0.38.1",
-    "clip @ git+https://github.com/openai/CLIP.git",
     "maskrcnn_benchmark @ git+https://github.com/brown-palm/visual-question-decomposition.git@glip",
-    "kornia==0.6.9",
     "numpy==1.23.5",
     "openai==0.27.7",
-    "opencv_python_headless==4.5.5.64",
     "Pillow==9.4.0",
     "scipy==1.9.3",
     "tensorflow==2.11.1",
     "timm==0.6.12",
-    "torch==1.13.1",
-    "torchvision==0.14.1",
+    "torch==2.1.0",
+    "torchvision==0.16.0",
     "transformers==4.29.2",
     "word2number==1.1"
 ]
+
+[tool.pdm.resolution.overrides]
+tensorflow-io-gcs-filesystem = "0.34.0"
