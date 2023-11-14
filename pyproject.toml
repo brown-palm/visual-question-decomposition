@@ -23,8 +23,8 @@ dependencies = [
     "scipy==1.9.3",
     "tensorflow==2.11.1",
     "timm==0.6.12",
-    "torch==2.1.0",
-    "torchvision==0.16.0",
+    "torch==2.0.1",
+    "torchvision==0.15.2",
     "transformers==4.29.2",
     "word2number==1.1"
 ]
