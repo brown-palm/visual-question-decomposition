@@ -21,7 +21,6 @@ dependencies = [
     "openai==0.27.7",
     "Pillow==9.4.0",
     "scipy==1.9.3",
-    "tensorflow==2.11.1",
     "timm==0.6.12",
     "torch==2.1.0",
     "torchvision==0.16.0",
