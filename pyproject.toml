@@ -27,6 +27,3 @@ dependencies = [
     "transformers==4.29.2",
     "word2number==1.1"
 ]
-
-[tool.pdm.resolution.overrides]
-tensorflow-io-gcs-filesystem = "0.34.0"
