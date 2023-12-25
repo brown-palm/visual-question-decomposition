@@ -16,6 +16,7 @@ authors = []
 dependencies = [
     "accelerate==0.18.0",
     "bitsandbytes==0.38.1",
+    "huggingface-hub==0.20.1",
     "maskrcnn_benchmark @ git+https://github.com/brown-palm/visual-question-decomposition.git@glip",
     "numpy==1.23.5",
     "openai==0.27.7",
