@@ -108,20 +108,16 @@ class DepthEstimationModel(BaseModel):
 class GLIPModel(BaseModel):
     name = 'glip'
 
-    def __init__(self, model_size='large', gpu_number=0, *args):
+    def __init__(self, gpu_number=0, *args):
         BaseModel.__init__(self, gpu_number)
 
         with contextlib.redirect_stderr(open(os.devnull, "w")):  # Do not print nltk_data messages when importing
             from maskrcnn_benchmark.engine.predictor_glip import GLIPDemo, to_image_list, create_positive_map, \
                 create_positive_map_label_to_token_from_positive_map
 
-        working_dir = f'{hub.get_dir()}/viper/GLIP/'
-        if model_size == 'tiny':
-            config_file = working_dir + "configs/glip_Swin_T_O365_GoldG.yaml"
-            weight_file = working_dir + "checkpoints/glip_tiny_model_o365_goldg_cc_sbu.pth"
-        else:  # large
-            config_file = working_dir + "configs/glip_Swin_L.yaml"
-            weight_file = working_dir + "checkpoints/glip_large_model.pth"
+        working_dir = f'{hub.get_dir()}/viper/glip/'
+        config_file = working_dir + "configs/glip_Swin_L.yaml"
+        weight_file = working_dir + "checkpoints/glip_large_model.pth"
 
         class OurGLIPDemo(GLIPDemo):
 
