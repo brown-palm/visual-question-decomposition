@@ -53,7 +53,9 @@ def execute_command(image) -> str:
     return ImagePatch(image).find("tree")\
 """
 
-print(viper_model.execute_code(image, code))
+output = viper_model.execute_code(image, code)
+result = output['__return__']
+print(result)
 ```
 
 ## Notes from the authors
