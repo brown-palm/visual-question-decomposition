@@ -1,0 +1,72 @@
+class ImagePatch:
+    """A Python class containing a crop of an image centered around a particular object, as well as relevant information.
+    Attributes
+    ----------
+    image : array_like
+
+    Methods
+    -------
+    simple_query(question: str=None)->str
+        Returns the answer to a basic question asked about the image. If no question is provided, returns the answer
+        to "What is this?".
+    """
+
+    def __init__(self, image):
+        """Initializes an ImagePatch object from an image.
+        Parameters
+        -------
+        image : array_like
+        """
+        self.image = image
+
+    def simple_query(self, question: str = None) -> str:
+        """Returns the answer to a basic question asked about the image. If no question is provided, returns the answer to "What is this?".
+        Parameters
+        -------
+        question : str
+            A string describing the question to be asked.
+
+        Examples
+        -------
+
+        >>> # Based on the arrows, which of the following organisms is an omnivore?
+        >>> # possible answers : ['barren-ground caribou', 'grizzly bear']
+        >>> def execute_command(image, possible_answers) -> str:
+        >>>     image_patch = ImagePatch(image)
+        >>>     for organism in possible_answers:
+        >>>         if image_patch.simple_query(f"Based on the arrows, is a {organism} an omnivore?") == "yes":
+        >>>             return organism
+        >>>     return image_patch.simple_query("Based on the arrows, which of the following organisms is an omnivore?")
+
+        >>> # What can Gordon and Roxanne trade to each get what they want?
+        >>> # possible answers : ["Gordon can trade his tomatoes for Roxanne's sandwich.", "Gordon can trade his tomatoes for Roxanne's broccoli.", "Roxanne can trade her almonds for Gordon's tomatoes.", "Roxanne can trade her broccoli for Gordon's oranges."]
+        >>> def execute_command(image, possible_answers) -> str:
+        >>>     image_patch = ImagePatch(image)
+        >>>     gordon_lunch_box = image_patch.simple_query("What is in Gordon's lunch box?")
+        >>>     roxanne_lunch_box = image_patch.simple_query("What is in Roxanne's lunch box?")
+        >>>     if "tomatoes" in gordon_lunch_box:
+        >>>         if "sandwich" in roxanne_lunch_box:
+        >>>             return "Gordon can trade his tomatoes for Roxanne's sandwich."
+        >>>         elif "broccoli" in roxanne_lunch_box:
+        >>>             return "Gordon can trade his tomatoes for Roxanne's broccoli."
+        >>>         elif "almonds" in roxanne_lunch_box:
+        >>>             return "Roxanne can trade her almonds for Gordon's tomatoes."
+        >>>     if "broccoli" in roxanne_lunch_box and "oranges" in gordon_lunch_box:
+        >>>         return "Roxanne can trade her broccoli for Gordon's oranges."
+        >>>     return image_patch.simple_query("What can Gordon and Roxanne trade to each get what they want?")
+
+        >>> # Which bird's beak is also adapted to get nectar out of long flowers?
+        >>> # possible answers : ["bufflehead", "bronzy sunbird"]
+        >>> def execute_command(image, possible_answers) -> str:
+        >>>     image_patch = ImagePatch(image)
+        >>>     for bird in possible_answers:
+        >>>         if image_patch.simple_query(f"Is a {bird}'s beak adapted to get nectar out of long flowers?") == "yes":
+        >>>             return "bird"
+        >>>     return image_patch.simple_query("Which bird's beak is also adapted to get nectar out of long flowers?")
+        """
+        return simple_qa(self.image, question)
+
+
+# Examples of how to use the API
+INSERT_QUERY_HERE
+def INSERT_SIGNATURE_HERE:

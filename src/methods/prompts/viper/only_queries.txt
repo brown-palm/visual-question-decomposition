@@ -1,0 +1,47 @@
+class ImagePatch:
+    """A Python class containing a crop of an image centered around a particular object, as well as relevant information.
+    Attributes
+    ----------
+    image : array_like
+
+    Methods
+    -------
+    simple_query(question: str=None)->str
+        Returns the answer to a basic question asked about the image. If no question is provided, returns the answer
+        to "What is this?".
+    """
+
+    def __init__(self, image):
+        """Initializes an ImagePatch object from an image.
+        Parameters
+        -------
+        image : array_like
+        """
+        self.image = image
+
+    def simple_query(self, question: str = None) -> str:
+        """Returns the answer to a basic question asked about the image. If no question is provided, returns the answer to "What is this?".
+        Parameters
+        -------
+        question : str
+            A string describing the question to be asked.
+        Examples
+        -------
+
+        >>> # Which kind of animal is not eating?
+        >>> def execute_command(image) -> str:
+        >>>     image_patch = ImagePatch(image)
+        >>>     animals = image_patch.simple_query("Which animals are in the image?")
+        >>>     return image_patch.simple_query(f"Which of the {animals} is not eating?")
+
+        >>> # What is in front of the horse?
+        >>> # contains a relation (around, next to, on, near, on top of, in front of, behind, etc), so ask directly
+        >>> return image_patch.simple_query("What is in front of the horse?")
+        >>>
+        """
+        return simple_qa(self.image, question)
+
+
+# Examples of how to use the API
+INSERT_QUERY_HERE
+def INSERT_SIGNATURE_HERE:

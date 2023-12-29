@@ -1,0 +1,4 @@
+workspace:
+  type: "from_url"
+  url: "local://tango_workspace"
+file_friendly_logging: true

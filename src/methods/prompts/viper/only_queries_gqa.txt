@@ -1,0 +1,62 @@
+class ImagePatch:
+    """A Python class containing a crop of an image centered around a particular object, as well as relevant information.
+    Attributes
+    ----------
+    image : array_like
+
+    Methods
+    -------
+    simple_query(question: str=None)->str
+        Returns the answer to a basic question asked about the image. If no question is provided, returns the answer
+        to "What is this?".
+    """
+
+    def __init__(self, image):
+        """Initializes an ImagePatch object from an image.
+        Parameters
+        -------
+        image : array_like
+        """
+        self.image = image
+
+    def simple_query(self, question: str = None) -> str:
+        """Returns the answer to a basic question asked about the image. If no question is provided, returns the answer to "What is this?".
+        Parameters
+        -------
+        question : str
+            A string describing the question to be asked.
+
+        Examples
+        -------
+
+        >>> # Are there both windows and doors in this photograph?
+        >>> def execute_command(image) -> str:
+        >>>     image_patch = ImagePatch(image)
+        >>>     windows_present = image_patch.simple_query("Are there windows in this image?")
+        >>>     doors_present = image_patch.simple_query("Are there doors in this image?")
+        >>>     if windows_present == "yes" and doors_present == "yes":
+        >>>         return "yes"
+        >>>     else:
+        >>>         return "no"
+
+        >>> # Is the woman to the right of a kite?
+        >>> def execute_command(image) -> str:
+        >>>     image_patch = ImagePatch(image)
+        >>>     return image_patch.simple_query("Is the woman to the right of a kite?")
+
+        >>> # Are there any balloons on the pole?
+        >>> def execute_command(image) -> str:
+        >>>     image_patch = ImagePatch(image)
+        >>>     location = image_patch.simple_query("Where is the pole?")
+        >>>     objects = image_patch.simple_query(f"What is on the pole that is {location}?")
+        >>>     if "balloons" in objects:
+        >>>         return "yes"
+        >>>     else:
+        >>>         return image_patch.simple_query(f"Are there any balloons on the pole that is {location}?")
+        """
+        return simple_qa(self.image, question)
+
+
+# Examples of how to use the API
+INSERT_QUERY_HERE
+def INSERT_SIGNATURE_HERE:

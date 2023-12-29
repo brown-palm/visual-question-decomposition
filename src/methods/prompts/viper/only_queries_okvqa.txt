@@ -1,0 +1,55 @@
+class ImagePatch:
+    """A Python class containing a crop of an image centered around a particular object, as well as relevant information.
+    Attributes
+    ----------
+    image : array_like
+
+    Methods
+    -------
+    simple_query(question: str=None)->str
+        Returns the answer to a basic question asked about the image. If no question is provided, returns the answer
+        to "What is this?".
+    """
+
+    def __init__(self, image):
+        """Initializes an ImagePatch object from an image.
+        Parameters
+        -------
+        image : array_like
+        """
+        self.image = image
+
+    def simple_query(self, question: str = None) -> str:
+        """Returns the answer to a basic question asked about the image. If no question is provided, returns the answer to "What is this?".
+        Parameters
+        -------
+        question : str
+            A string describing the question to be asked.
+
+        Examples
+        -------
+
+        >>> # How do you care for this equipment?
+        >>> def execute_command(image) -> str:
+        >>>     image_patch = ImagePatch(image)
+        >>>     equipment_type = image_patch.simple_query("What type of equipment is this?")
+        >>>     return image_patch.simple_query(f"How do you care for this {equipment_type}?")
+
+        >>> # What is the menu at this restaurant?
+        >>> def execute_command(image) -> str:
+        >>>     image_patch = ImagePatch(image)
+        >>>     restaurant = image_patch.simple_query("What restaurant is this?")
+        >>>     return image_patch.simple_query(f"What is the menu at {restaurant}?")
+
+        >>> # What is the title commonly given to the man wearing the red tie and green vest?
+        >>> def execute_command(image) -> str:
+        >>>     image_patch = ImagePatch(image)
+        >>>     vested_man = image_patch.simple_query("Who is the man wearing the red tie and green vest?")
+        >>>     return image_patch.simple_query(f"What is the title commonly given to the {vested_man}?")
+        """
+        return simple_qa(self.image, question)
+
+
+# Examples of how to use the API
+INSERT_QUERY_HERE
+def INSERT_SIGNATURE_HERE:

@@ -1,0 +1,59 @@
+class ImagePatch:
+    """A Python class containing a crop of an image centered around a particular object, as well as relevant information.
+    Attributes
+    ----------
+    image : array_like
+
+    Methods
+    -------
+    simple_query(question: str=None)->str
+        Returns the answer to a basic question asked about the image. If no question is provided, returns the answer
+        to "What is this?".
+    """
+
+    def __init__(self, image):
+        """Initializes an ImagePatch object from an image.
+        Parameters
+        -------
+        image : array_like
+        """
+        self.image = image
+
+    def simple_query(self, question: str = None) -> str:
+        """Returns the answer to a basic question asked about the image. If no question is provided, returns the answer to "What is this?".
+        Parameters
+        -------
+        question : str
+            A string describing the question to be asked.
+
+        Examples
+        -------
+
+        >>> # What type of surfboard is the man in green holding?
+        >>> def execute_command(image) -> str:
+        >>>     image_patch = ImagePatch(image)
+        >>>     length = image_patch.simple_query("How long is the man in green's surfboard?")
+        >>>     shape = image_patch.simple_query("What shape is the man in green's surfboard?")
+        >>>     board_type = image_patch.simple_query(f"What type of surfboard is {length} and {shape}?")
+        >>>     return board_type
+
+        >>> # What does the vehicle look like?
+        >>> def execute_command(image) -> str:
+        >>>     image_patch = ImagePatch(image)
+        >>>     return image_patch.simple_query("What type of vehicle is this?")
+
+        >>> # In which country is this bus located?
+        >>> def execute_command(image) -> str:
+        >>>     image_patch = ImagePatch(image)
+        >>>     setting = image_patch.simple_query()
+        >>>     bus_type = image_patch.simple_query("What type of bus is this?")
+        >>>     city_name = image_patch.simple_query(f"What city is known for {setting} and {bus_type} buses?")
+        >>>     country_name = image_patch.simple_query(f"What country is {city} in?")
+        >>>     return country_name
+        """
+        return simple_qa(self.image, question)
+
+
+# Examples of how to use the API
+INSERT_QUERY_HERE
+def INSERT_SIGNATURE_HERE:
