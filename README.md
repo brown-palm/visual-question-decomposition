@@ -23,7 +23,7 @@ Modular neural networks without additional training have recently been shown to 
 ### Setup
 
 You **must** run the following commands on your GPU machine, as certain dependencies require CUDA compilation.
-We highly recommend using the *much faster* [`micromamba`](mamba.readthedocs.io/en/latest/user_guide/micromamba.html) as a nearly-drop-in replacement for `conda`.
+We highly recommend using the *much faster* [`micromamba`](https://mamba.readthedocs.io/en/latest/user_guide/micromamba.html) as a nearly-drop-in replacement for `conda`.
 
 ```bash
 conda env create -f conda-lock.yml --prefix ./.venv
