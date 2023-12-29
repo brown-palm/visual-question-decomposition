@@ -20,7 +20,7 @@ def download_tar_gz(url: str, output_dir: Union[str, os.PathLike]):
     tarfile.open(fileobj=io.BytesIO(r.content), mode="r:gz").extractall(output_dir)
 
 
-def main(dataset: Literal["all", "vqav2", "gqa", "okvqa", "aokvqa", "coco"] = "all"):
+def main(dataset: Literal["all", "vqav2", "gqa", "okvqa", "aokvqa", "coco", "scienceqa"] = "all"):
     download_all = dataset == "all"
 
     if download_all or dataset == "vqav2":

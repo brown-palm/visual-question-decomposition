@@ -23,6 +23,7 @@ Modular neural networks without additional training have recently been shown to 
 ### Setup
 
 You **must** run the following commands on your GPU machine, as certain dependencies require CUDA compilation.
+We highly recommend using the *much faster* [`micromamba`](mamba.readthedocs.io/en/latest/user_guide/micromamba.html) as a nearly-drop-in replacement for `conda`.
 
 ```bash
 conda env create -f conda-lock.yml --prefix ./.venv
@@ -41,27 +42,27 @@ You can adjust the environment variables in `.env`. If you make changes, run `co
 
 ### Download Viper models
 
-Download models to `$TORCH_HOME/hub/viper` (usually `~/.cache/torch/hub/viper`).
-
 ```bash
+# download models to `$TORCH_HOME/hub/viper` (usually `~/.cache/torch/hub/viper`)
 python -m viper.download_models
 ```
 
 ### Download datasets
-
-Datasets are saved to `$VQA_DIR`, `$GQA_DIR`, `$OKVQA_DIR`, `$AOKVQA_DIR`, and `$COCO_DIR` (by default: `./datasets/*`), as well as `$HF_HOME` (for ScienceQA).
 
 ```bash
 # download all datasets
 python -m src.data.download
 
 # download a specific dataset
-## coco is required for vqav2, okvqa, and aokvqa
-## scienceqa is downloaded to $HF_HOME/datasets/derek-thomas___science_qa
 python -m src.data.download --dataset {vqav2,gqa,okvqa,aokvqa,coco,scienceqa}
+
+## coco is required for vqav2, okvqa, and aokvqa
+## scienceqa is saved to $HF_HOME/datasets/derek-thomas___science_qa
 ```
 
 # Running experiments
+
+Never forget to `conda activate ./.venv`.
 
 Run the core experiments (with default settings from our paper):
 
@@ -70,6 +71,8 @@ python experiments/vqa.py \
 dataset:{vqav2,gqa,okvqa,aokvqa,scienceqa} \
 method:{e2e,viper,successive}
 ```
+
+This repo uses [AI2 Tango](github.com/allenai/tango) for experiment tracking and caching.
 
 ### Additional Settings
 
@@ -102,9 +105,7 @@ python experiments/vqa.py --gpt-eval-model text-davinci-003 dataset:vqav2 --data
 
 ### Deprecated OpenAI Models
 
-Unfortunately, the default GPT models (`code-davinci-002`, `text-davinci-002`, `text-davinci-003`) used in ViperGPT and our paper are (or will shortly be) [deprecated](https://platform.openai.com/docs/deprecations). For reproducibility and best practices, we strongly recommend using open-source LLMs in your future research.
-
-We instead provide the options (in the above CLI settings) to use different GPT models. However, our work is designed around the legacy [Completions API](https://platform.openai.com/docs/api-reference/completions), so your milage may vary. If you use a Chat model (e.g. `gpt-4`) with ViperGPT, you may have to adjust the prompt ([example](https://github.com/cvlab-columbia/viper/blob/main/prompts/chatapi.prompt)). The Successive method, GPT-based evaluation metric, and MC evaluation of ViperGPT strictly require the Completions API and will not work.
+Unfortunately, the default GPT models (`code-davinci-002`, `text-davinci-002`, `text-davinci-003`) used in ViperGPT and our paper are (or will shortly be) [deprecated](https://platform.openai.com/docs/deprecations). Moreover, the legacy [Completions API](https://platform.openai.com/docs/api-reference/completions) is critical to several functions of this repository. You may work around these restrictions by specifying different GPT models and adjusting the prompts appropriately (e.g. see this [chat prompt for ViperGPT](https://github.com/cvlab-columbia/viper/blob/main/prompts/chatapi.prompt)), but your milage may vary. For reproducibility and best practices, we strongly recommend using open-source LLMs in your future research.
 
 # Citation
 
