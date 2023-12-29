@@ -15,7 +15,7 @@ license = {text = "MIT"}
 authors = [{name = "apoorvkh", email = "mail@apoorvkh.com"},]
 dependencies = [
     "ai2-tango==1.3.2",
-    "datasets==2.14.4",
+    "datasets==2.14.6",
     "openai==0.27.7",
     "Pillow==9.4.0",
     "rich==13.5.2",

@@ -13,11 +13,11 @@ def load_gqa(split: str, subset: str, k: Optional[int], gqa_dir: str) -> VQAData
 
     if split == "train" and subset == "all":
         gqa_files = [
-            f"{gqa_dir}/questions/train_all_questions/train_all_questions_{i}.json"
+            f"{gqa_dir}/questions1.2/train_all_questions/train_all_questions_{i}.json"
             for i in range(10)
         ]
     else:
-        gqa_files = [f"{gqa_dir}/questions/{split}_{subset}_questions.json"]
+        gqa_files = [f"{gqa_dir}/questions1.2/{split}_{subset}_questions.json"]
 
     entries = {}
 

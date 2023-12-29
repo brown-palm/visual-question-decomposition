@@ -37,7 +37,7 @@ You can adjust the environment variables in `.env`. If you make changes, run `co
 - `OPENAI_ORGANIZATION`: your OpenAI [organization ID](https://platform.openai.com/account/organization)
 - `OPENAI_API_KEY`: your OpenAI [API key](https://platform.openai.com/api-keys)
 - `TORCH_HOME`: for [downloading ViperGPT models](#download-viper-models)
-- `VQA_DIR`, `GQA_DIR`, `OKVQA_DIR`, `AOKVQA_DIR`, `COCO_DIR`: for [storing datasets](#download-datasets)
+- `VQA_DIR`, `GQA_DIR`, `OKVQA_DIR`, `AOKVQA_DIR`, `COCO_DIR`, `HF_HOME`: for [storing datasets](#download-datasets)
 
 ### Download Viper models
 
@@ -49,14 +49,16 @@ python -m viper.download_models
 
 ### Download datasets
 
-Datasets are saved to `$VQA_DIR`, `$GQA_DIR`, `$OKVQA_DIR`, `$AOKVQA_DIR`, and `$COCO_DIR` (by default: `./datasets/*`).
+Datasets are saved to `$VQA_DIR`, `$GQA_DIR`, `$OKVQA_DIR`, `$AOKVQA_DIR`, and `$COCO_DIR` (by default: `./datasets/*`), as well as `$HF_HOME` (for ScienceQA).
 
 ```bash
 # download all datasets
-python -m src.download_data
+python -m src.data.download
 
 # download a specific dataset
-python -m src.download_data dataset:{vqav2,gqa,okvqa,aokvqa,coco}
+## coco is required for vqav2, okvqa, and aokvqa
+## scienceqa is downloaded to $HF_HOME/datasets/derek-thomas___science_qa
+python -m src.data.download --dataset {vqav2,gqa,okvqa,aokvqa,coco,scienceqa}
 ```
 
 # Running experiments
