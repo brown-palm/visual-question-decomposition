@@ -13,7 +13,7 @@
 version: 1
 metadata:
   content_hash:
-    linux-64: 05c0099429e7d2716f84392daf262563ea0c3ff96f068d300115af122b579a64
+    linux-64: ee726db1aed7cea8e604eadfa62bab3408d72aad7193e479bd24d8a6ae169258
   channels:
   - url: nvidia/label/cuda-12.1.0
     used_env_vars: []
@@ -40,10 +40,10 @@ package:
   manager: conda
   platform: linux-64
   dependencies: {}
-  url: https://conda.anaconda.org/apoorvkh/linux-64/auto-dotenv-1.0-0.tar.bz2
+  url: https://conda.anaconda.org/conda-forge/noarch/auto-dotenv-1.0-hd8ed1ab_0.conda
   hash:
-    md5: b3c25ee6dcc670035715bc97b5ddf969
-    sha256: c80512e74b0623b8150d2c421826aa3b09d17d3d8649020e8fb3c5b5224b7285
+    md5: 19bbf499e43ef66c26677573caffa1b1
+    sha256: de3e704b9c03b1b46c1524fb38b9341d251c1c1fef1f737303f03cbaae6b7381
   category: main
   optional: false
 - name: ca-certificates

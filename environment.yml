@@ -9,6 +9,6 @@ dependencies:
   - python=3.9.18
   - pip=23.2.1
   - pdm=2.11.1
-  - apoorvkh::auto-dotenv=1.0
+  - auto-dotenv=1.0
 platforms:
   - linux-64
